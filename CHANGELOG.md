@@ -1,3 +1,9 @@
+## [1.0.0-dev.9](https://github.com/del-razor/youtube-android-auto-patches/compare/v1.0.0-dev.8...v1.0.0-dev.9) (2026-11-23)
+
+### 🐛 Bug Fixes
+
+* Allow YouTube to open on the car's private display ([e6d0dd8](https://github.com/del-razor/youtube-android-auto-patches/commit/e6d0dd85d7449411e75778ef5612dcd7a92e7187))
+
 ## [1.0.0-dev.8](https://github.com/del-razor/youtube-android-auto-patches/compare/v1.0.0-dev.7...v1.0.0-dev.8) (2026-11-23)
 
 ### ✨ New Features
