@@ -2,60 +2,78 @@ package app.delrazor.extension.youtube.androidauto;
 
 import static app.delrazor.extension.youtube.androidauto.AndroidAutoBridge.TAG;
 
-import android.graphics.Bitmap;
+import android.app.Activity;
+import android.app.ActivityOptions;
+import android.app.Application;
+import android.content.Context;
+import android.content.Intent;
 import android.graphics.Color;
-import android.graphics.Typeface;
-import android.media.MediaMetadata;
+import android.hardware.display.DisplayManager;
+import android.hardware.display.VirtualDisplay;
 import android.media.session.MediaController;
 import android.media.session.PlaybackState;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.support.car.Car;
 import android.support.car.CarConnectionCallback;
 import android.support.car.hardware.CarSensorEvent;
 import android.support.car.hardware.CarSensorManager;
 import android.util.Log;
 import android.util.TypedValue;
+import android.view.Display;
 import android.view.Gravity;
 import android.view.KeyEvent;
+import android.view.MotionEvent;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
-import android.widget.ImageView;
-import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import com.google.android.apps.auto.sdk.CarActivity;
 
+import java.lang.ref.WeakReference;
+
 /**
- * The YouTube screen on the car display.
+ * YouTube on the car display.
  * <p>
- * Shows YouTube's own video (moved here by {@link CarVideoBridge}) with play, pause and skip
- * buttons. Video is shown only when the car's driving status allows video, the same flag the
- * head unit sends Android Auto. When the car says video is not allowed, the screen shows the
- * artwork and title instead, and audio keeps playing.
+ * This screen creates a private virtual display that draws onto a surface filling the car
+ * screen, and opens YouTube's own main activity on that display. YouTube treats it as a normal,
+ * visible screen, so its whole app works there: home, search, the player and its controls.
+ * Touches and keys from the car are passed to that activity in-process.
+ * <p>
+ * The car's driving status is followed: when the car reports that video is not allowed,
+ * the screen is covered and only audio continues. The car's flag is never faked or ignored.
  * <p>
  * The UI is built in code because the extension cannot add resources to YouTube.
  */
 @SuppressWarnings("unused")
-public class CarVideoActivity extends CarActivity
-        implements SurfaceHolder.Callback, CarVideoBridge.VideoSizeListener {
+public class CarVideoActivity extends CarActivity implements SurfaceHolder.Callback {
+
+    private static final String VIRTUAL_DISPLAY_NAME = "DelrazorCarYouTube";
+
+    /** How long to wait for YouTube to appear on the car display before reporting a failure. */
+    private static final long LAUNCH_TIMEOUT_MS = 4000;
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
-    private FrameLayout videoFrame;
     private SurfaceView surfaceView;
-    private ImageView artworkView;
-    private TextView titleView;
-    private TextView playPauseButton;
+    private TextView coverView;
     private TextView statusView;
 
-    private boolean surfaceReady;
-    private int videoWidth;
-    private int videoHeight;
+    // Virtual display showing YouTube.
+    private VirtualDisplay virtualDisplay;
+    private boolean launchRequested;
+    private String launchStatus = "starting";
+
+    /** The YouTube activity currently resumed on our virtual display. */
+    private static WeakReference<Activity> hostedActivity = new WeakReference<>(null);
+    private static int hostedDisplayId = Display.INVALID_DISPLAY;
+    private static boolean lifecycleCallbacksRegistered;
 
     // Car driving status.
     private Car car;
@@ -64,14 +82,15 @@ public class CarVideoActivity extends CarActivity
     private Boolean carAllowsVideo;
     private String statusText = "waiting for car";
 
-    private MediaController controller;
+    /** Shows the readout for a while after the screen opens, and while something is wrong. */
+    private long statusVisibleUntil;
 
     // region Lifecycle
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        Log.d(TAG, "Car video screen created");
+        Log.d(TAG, "Car screen created");
 
         setIgnoreConfigChanges(0xFFFFFFFF);
         try {
@@ -80,31 +99,28 @@ public class CarVideoActivity extends CarActivity
             Log.d(TAG, "Could not hide the app header: " + ex);
         }
 
+        registerActivityTracking();
         setContentView(buildLayout());
-        CarVideoBridge.setVideoSizeListener(this);
+        statusVisibleUntil = SystemClock.uptimeMillis() + 15000;
         connectCar();
-        updateStatusView();
     }
 
     @Override
     public void onStart() {
         super.onStart();
-        attachController();
         mainHandler.post(statusTicker);
     }
 
     @Override
     public void onStop() {
         mainHandler.removeCallbacks(statusTicker);
-        detachController();
         super.onStop();
     }
 
     @Override
     public void onDestroy() {
-        Log.d(TAG, "Car video screen destroyed");
-        CarVideoBridge.setVideoSizeListener(null);
-        CarVideoBridge.setCarSurface(null);
+        Log.d(TAG, "Car screen destroyed");
+        releaseVirtualDisplay();
         disconnectCar();
         super.onDestroy();
     }
@@ -117,56 +133,30 @@ public class CarVideoActivity extends CarActivity
         FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(Color.BLACK);
 
-        // Video, centered and sized to the video's aspect ratio in onVideoSize().
-        videoFrame = new FrameLayout(this);
         surfaceView = new SurfaceView(this);
         surfaceView.getHolder().addCallback(this);
-        videoFrame.addView(surfaceView, new FrameLayout.LayoutParams(
+        surfaceView.setFocusable(true);
+        surfaceView.setOnTouchListener((v, event) -> forwardTouch(event));
+        root.addView(surfaceView, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        root.addView(videoFrame, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, Gravity.CENTER));
 
-        // Artwork, shown when the car does not allow video.
-        artworkView = new ImageView(this);
-        artworkView.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        artworkView.setVisibility(View.GONE);
-        root.addView(artworkView, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, Gravity.CENTER));
+        // Covers the screen when the car does not allow video. Swallows touches.
+        coverView = new TextView(this);
+        coverView.setBackgroundColor(Color.BLACK);
+        coverView.setTextColor(Color.WHITE);
+        coverView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 22);
+        coverView.setGravity(Gravity.CENTER);
+        coverView.setText("Video is off: the car does not allow video right now.\nAudio keeps playing.");
+        coverView.setClickable(true);
+        coverView.setVisibility(View.GONE);
+        root.addView(coverView, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        // Bottom bar: title and buttons.
-        LinearLayout bar = new LinearLayout(this);
-        bar.setOrientation(LinearLayout.HORIZONTAL);
-        bar.setGravity(Gravity.CENTER_VERTICAL);
-        bar.setBackgroundColor(0x99000000);
-        int pad = dp(12);
-        bar.setPadding(pad, pad, pad, pad);
-
-        titleView = new TextView(this);
-        titleView.setTextColor(Color.WHITE);
-        titleView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20);
-        titleView.setSingleLine(true);
-        titleView.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        bar.addView(titleView, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-
-        bar.addView(button("⏮", v -> {
-            MediaController.TransportControls c = controls();
-            if (c != null) c.skipToPrevious();
-        }));
-        playPauseButton = button("⏯", v -> togglePlayPause());
-        bar.addView(playPauseButton);
-        bar.addView(button("⏭", v -> {
-            MediaController.TransportControls c = controls();
-            if (c != null) c.skipToNext();
-        }));
-
-        root.addView(bar, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM));
-
-        // Small readout of the car's video flag, top right.
+        // Diagnostics, top right. Not clickable, so touches pass through to YouTube.
         statusView = new TextView(this);
         statusView.setTextColor(0xCCFFFFFF);
         statusView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
-        statusView.setBackgroundColor(0x66000000);
+        statusView.setBackgroundColor(0x99000000);
         statusView.setPadding(dp(6), dp(3), dp(6), dp(3));
         FrameLayout.LayoutParams statusParams = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP | Gravity.END);
@@ -176,94 +166,18 @@ public class CarVideoActivity extends CarActivity
         return root;
     }
 
-    private TextView button(String label, View.OnClickListener onClick) {
-        TextView button = new TextView(this);
-        button.setText(label);
-        button.setTextColor(Color.WHITE);
-        button.setTypeface(Typeface.DEFAULT_BOLD);
-        button.setTextSize(TypedValue.COMPLEX_UNIT_SP, 32);
-        button.setGravity(Gravity.CENTER);
-        button.setFocusable(true); // For rotary controllers.
-        button.setClickable(true);
-        button.setOnClickListener(onClick);
-        int size = dp(64);
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(size, size);
-        params.setMarginStart(dp(8));
-        button.setLayoutParams(params);
-        return button;
-    }
-
     private int dp(int value) {
         return Math.round(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, value,
                 getResources().getDisplayMetrics()));
     }
 
-    @Override
-    public void onVideoSize(int width, int height) {
-        videoWidth = width;
-        videoHeight = height;
-        layoutVideo();
-    }
-
-    /** Fits the video inside the screen, keeping its aspect ratio. */
-    private void layoutVideo() {
-        View parent = (View) videoFrame.getParent();
-        if (parent == null || videoWidth <= 0 || videoHeight <= 0) return;
-        int screenWidth = parent.getWidth();
-        int screenHeight = parent.getHeight();
-        if (screenWidth <= 0 || screenHeight <= 0) {
-            parent.post(this::layoutVideo);
-            return;
-        }
-
-        float scale = Math.min((float) screenWidth / videoWidth, (float) screenHeight / videoHeight);
-        FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) videoFrame.getLayoutParams();
-        params.width = Math.round(videoWidth * scale);
-        params.height = Math.round(videoHeight * scale);
-        params.gravity = Gravity.CENTER;
-        videoFrame.setLayoutParams(params);
-    }
-
-    // endregion
-
-    // region Video surface
-
-    @Override
-    public void surfaceCreated(SurfaceHolder holder) {
-        surfaceReady = true;
-        applyVideoState();
-    }
-
-    @Override
-    public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
-    }
-
-    @Override
-    public void surfaceDestroyed(SurfaceHolder holder) {
-        surfaceReady = false;
-        // Must move the decoders off this surface before it is destroyed.
-        CarVideoBridge.setCarSurface(null);
-    }
-
-    /** Sends video to the car only when the surface exists and the car allows video. */
     private void applyVideoState() {
-        boolean showVideo = surfaceReady && Boolean.TRUE.equals(carAllowsVideo);
-
-        CarVideoBridge.setCarSurface(showVideo ? surfaceView.getHolder().getSurface() : null);
-        videoFrame.setVisibility(showVideo ? View.VISIBLE : View.INVISIBLE);
-        artworkView.setVisibility(showVideo ? View.GONE : View.VISIBLE);
+        boolean allowed = Boolean.TRUE.equals(carAllowsVideo);
+        coverView.setVisibility(allowed ? View.GONE : View.VISIBLE);
+        if (!allowed) statusVisibleUntil = SystemClock.uptimeMillis() + 15000;
         updateStatusView();
     }
 
-    private void updateStatusView() {
-        if (statusView == null) return;
-        String flag = carAllowsVideo == null ? "unknown"
-                : (carAllowsVideo ? "allowed" : "not allowed");
-        statusView.setText("Car video flag: " + flag + " (" + statusText + ")\n"
-                + CarVideoBridge.debugSummary());
-    }
-
-    /** Refreshes the readout once a second while the screen is open. */
     private final Runnable statusTicker = new Runnable() {
         @Override
         public void run() {
@@ -272,6 +186,250 @@ public class CarVideoActivity extends CarActivity
         }
     };
 
+    private void updateStatusView() {
+        if (statusView == null) return;
+        boolean problem = hostedActivity.get() == null || !Boolean.TRUE.equals(carAllowsVideo);
+        if (!problem && SystemClock.uptimeMillis() > statusVisibleUntil) {
+            statusView.setVisibility(View.GONE);
+            return;
+        }
+        statusView.setVisibility(View.VISIBLE);
+
+        String flag = carAllowsVideo == null ? "unknown"
+                : (carAllowsVideo ? "allowed" : "not allowed");
+        Activity activity = hostedActivity.get();
+        statusView.setText("Car video flag: " + flag + " (" + statusText + ")\n"
+                + "Car display: " + (virtualDisplay == null ? "none"
+                : virtualDisplay.getDisplay().getDisplayId()) + ", " + launchStatus + "\n"
+                + "On car: " + (activity == null ? "nothing" : activity.getClass().getSimpleName()));
+    }
+
+    // endregion
+
+    // region Virtual display with YouTube on it
+
+    @Override
+    public void surfaceCreated(SurfaceHolder holder) {
+    }
+
+    @Override
+    public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
+        if (width <= 0 || height <= 0) return;
+        int densityDpi = getResources().getDisplayMetrics().densityDpi;
+
+        try {
+            if (virtualDisplay == null) {
+                DisplayManager displayManager =
+                        (DisplayManager) getApplicationContext().getSystemService(Context.DISPLAY_SERVICE);
+                // No flags: a private display only this app can show activities on.
+                virtualDisplay = displayManager.createVirtualDisplay(VIRTUAL_DISPLAY_NAME,
+                        width, height, densityDpi, holder.getSurface(),
+                        DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY);
+                hostedDisplayId = virtualDisplay.getDisplay().getDisplayId();
+                Log.d(TAG, "Car display " + hostedDisplayId + " created: "
+                        + width + "x" + height + " @" + densityDpi);
+            } else {
+                virtualDisplay.setSurface(holder.getSurface());
+                virtualDisplay.resize(width, height, densityDpi);
+            }
+        } catch (Exception ex) {
+            Log.e(TAG, "Could not create the car display", ex);
+            launchStatus = "display error: " + ex.getClass().getSimpleName();
+            return;
+        }
+
+        if (!launchRequested) {
+            launchRequested = true;
+            launchYouTube();
+        }
+    }
+
+    @Override
+    public void surfaceDestroyed(SurfaceHolder holder) {
+        // Keep the display, and YouTube on it, while the car hides this screen for a moment.
+        if (virtualDisplay != null) virtualDisplay.setSurface(null);
+    }
+
+    private void launchYouTube() {
+        try {
+            Intent intent = getPackageManager().getLaunchIntentForPackage(getPackageName());
+            if (intent == null) {
+                launchStatus = "no launch intent";
+                return;
+            }
+            // A separate task, so the car gets its own YouTube window.
+            // GUESS: YouTube's main activity allows a second task. If it does not, Android moves
+            // the existing YouTube task to the car display instead, which also works.
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_MULTIPLE_TASK);
+
+            ActivityOptions options = ActivityOptions.makeBasic();
+            options.setLaunchDisplayId(hostedDisplayId);
+
+            getApplicationContext().startActivity(intent, options.toBundle());
+            launchStatus = "opening YouTube";
+            Log.d(TAG, "Opening YouTube on car display " + hostedDisplayId);
+
+            mainHandler.postDelayed(() -> {
+                if (hostedActivity.get() == null) {
+                    launchStatus = "YouTube did not open on the car display";
+                    statusVisibleUntil = Long.MAX_VALUE;
+                }
+            }, LAUNCH_TIMEOUT_MS);
+        } catch (Exception ex) {
+            Log.e(TAG, "Could not open YouTube on the car display", ex);
+            launchStatus = "launch error: " + ex.getClass().getSimpleName() + ": " + ex.getMessage();
+            statusVisibleUntil = Long.MAX_VALUE;
+        }
+    }
+
+    private void releaseVirtualDisplay() {
+        Activity activity = hostedActivity.get();
+        if (activity != null) {
+            // Close the car's YouTube window instead of letting Android move it to the phone.
+            try {
+                activity.finishAndRemoveTask();
+            } catch (Exception ex) {
+                Log.d(TAG, "Could not close YouTube on the car display: " + ex);
+            }
+        }
+        hostedActivity = new WeakReference<>(null);
+
+        if (virtualDisplay != null) {
+            virtualDisplay.release();
+            virtualDisplay = null;
+        }
+        hostedDisplayId = Display.INVALID_DISPLAY;
+        launchRequested = false;
+    }
+
+    /** Finds YouTube activities as they appear on the car display. */
+    private void registerActivityTracking() {
+        if (lifecycleCallbacksRegistered) return;
+        Application application = (Application) getApplicationContext();
+        application.registerActivityLifecycleCallbacks(new Application.ActivityLifecycleCallbacks() {
+            @Override
+            public void onActivityResumed(Activity activity) {
+                if (displayIdOf(activity) == hostedDisplayId && hostedDisplayId != Display.INVALID_DISPLAY) {
+                    Log.d(TAG, "On car display: " + activity.getClass().getName());
+                    hostedActivity = new WeakReference<>(activity);
+                }
+            }
+
+            @Override
+            public void onActivityDestroyed(Activity activity) {
+                if (hostedActivity.get() == activity) hostedActivity = new WeakReference<>(null);
+            }
+
+            @Override public void onActivityCreated(Activity activity, Bundle state) { }
+            @Override public void onActivityStarted(Activity activity) { }
+            @Override public void onActivityPaused(Activity activity) { }
+            @Override public void onActivityStopped(Activity activity) { }
+            @Override public void onActivitySaveInstanceState(Activity activity, Bundle state) { }
+        });
+        lifecycleCallbacksRegistered = true;
+    }
+
+    @SuppressWarnings("deprecation")
+    private static int displayIdOf(Activity activity) {
+        try {
+            Display display = Build.VERSION.SDK_INT >= 30
+                    ? activity.getDisplay()
+                    : activity.getWindowManager().getDefaultDisplay();
+            return display == null ? Display.INVALID_DISPLAY : display.getDisplayId();
+        } catch (Exception ex) {
+            return Display.INVALID_DISPLAY;
+        }
+    }
+
+    // endregion
+
+    // region Input from the car
+
+    /** The car screen and the virtual display are the same size, so coordinates map 1:1. */
+    private boolean forwardTouch(MotionEvent event) {
+        Activity activity = hostedActivity.get();
+        if (activity == null) return false;
+        if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+            statusVisibleUntil = 0; // Hide the readout once the user starts using YouTube.
+        }
+        MotionEvent copy = MotionEvent.obtain(event);
+        try {
+            activity.dispatchTouchEvent(copy);
+        } catch (Exception ex) {
+            Log.e(TAG, "Touch forwarding failure", ex);
+        } finally {
+            copy.recycle();
+        }
+        return true;
+    }
+
+    @Override
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+        if (handleMediaKey(keyCode, event, true)) return true;
+        Activity activity = hostedActivity.get();
+        if (activity != null && activity.dispatchKeyEvent(event)) return true;
+        return super.onKeyDown(keyCode, event);
+    }
+
+    @Override
+    public boolean onKeyUp(int keyCode, KeyEvent event) {
+        if (handleMediaKey(keyCode, event, false)) return true;
+        Activity activity = hostedActivity.get();
+        if (activity != null && activity.dispatchKeyEvent(event)) return true;
+        return super.onKeyUp(keyCode, event);
+    }
+
+    /** Back from the car goes to YouTube first, like on the phone. */
+    @Override
+    public void onBackPressed() {
+        Activity activity = hostedActivity.get();
+        if (activity != null) {
+            activity.onBackPressed();
+        } else {
+            super.onBackPressed();
+        }
+    }
+
+    /** Steering wheel and head unit media keys control YouTube's media session. */
+    private boolean handleMediaKey(int keyCode, KeyEvent event, boolean down) {
+        switch (keyCode) {
+            case KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE:
+            case KeyEvent.KEYCODE_MEDIA_PLAY:
+            case KeyEvent.KEYCODE_MEDIA_PAUSE:
+            case KeyEvent.KEYCODE_HEADSETHOOK:
+            case KeyEvent.KEYCODE_MEDIA_NEXT:
+            case KeyEvent.KEYCODE_MEDIA_PREVIOUS:
+                break;
+            default:
+                return false;
+        }
+        if (down) return true;
+
+        MediaController controller = AndroidAutoBridge.pickController();
+        if (controller == null) return true;
+        MediaController.TransportControls controls = controller.getTransportControls();
+        PlaybackState state = controller.getPlaybackState();
+        boolean playing = state != null && state.getState() == PlaybackState.STATE_PLAYING;
+
+        switch (keyCode) {
+            case KeyEvent.KEYCODE_MEDIA_NEXT:
+                controls.skipToNext();
+                break;
+            case KeyEvent.KEYCODE_MEDIA_PREVIOUS:
+                controls.skipToPrevious();
+                break;
+            case KeyEvent.KEYCODE_MEDIA_PLAY:
+                controls.play();
+                break;
+            case KeyEvent.KEYCODE_MEDIA_PAUSE:
+                controls.pause();
+                break;
+            default:
+                if (playing) controls.pause(); else controls.play();
+        }
+        return true;
+    }
+
     // endregion
 
     // region Car driving status
@@ -279,7 +437,6 @@ public class CarVideoActivity extends CarActivity
     /**
      * Reads the car's driving status. Its "no video" bit is what the head unit tells
      * Android Auto about video. This screen follows it and never overrides it.
-     * GUESS: Car.createCar works from a CarActivity context with this SDK.
      */
     private void connectCar() {
         try {
@@ -335,7 +492,7 @@ public class CarVideoActivity extends CarActivity
 
     /**
      * @param allowsVideo True or false as reported by the car, or null if the car does not
-     *                    report it. Without a report, video stays off, as in Android Auto.
+     *                    report it. Without a report, video stays covered, as in Android Auto.
      */
     private void onDrivingStatus(Boolean allowsVideo, String detail) {
         Log.d(TAG, "Car video flag: " + allowsVideo + " (" + detail + ")");
@@ -355,101 +512,6 @@ public class CarVideoActivity extends CarActivity
         }
         sensorManager = null;
         car = null;
-    }
-
-    // endregion
-
-    // region Playback controls
-
-    private void attachController() {
-        detachController();
-        controller = AndroidAutoBridge.pickController();
-        if (controller != null) {
-            controller.registerCallback(controllerCallback, mainHandler);
-            showMetadata(controller.getMetadata());
-            showPlaybackState(controller.getPlaybackState());
-        } else {
-            titleView.setText("Start a video in YouTube on your phone");
-        }
-    }
-
-    private void detachController() {
-        if (controller != null) {
-            controller.unregisterCallback(controllerCallback);
-            controller = null;
-        }
-    }
-
-    private final MediaController.Callback controllerCallback = new MediaController.Callback() {
-        @Override
-        public void onMetadataChanged(MediaMetadata metadata) {
-            showMetadata(metadata);
-        }
-
-        @Override
-        public void onPlaybackStateChanged(PlaybackState state) {
-            showPlaybackState(state);
-        }
-
-        @Override
-        public void onSessionDestroyed() {
-            // YouTube made a new session. Follow the one that is playing now.
-            mainHandler.post(CarVideoActivity.this::attachController);
-        }
-    };
-
-    private void showMetadata(MediaMetadata metadata) {
-        if (metadata == null) return;
-        CharSequence title = metadata.getDescription().getTitle();
-        titleView.setText(title != null ? title : "");
-
-        Bitmap art = metadata.getBitmap(MediaMetadata.METADATA_KEY_ART);
-        if (art == null) art = metadata.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART);
-        if (art == null) art = metadata.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON);
-        artworkView.setImageBitmap(art);
-    }
-
-    private void showPlaybackState(PlaybackState state) {
-        boolean playing = state != null && state.getState() == PlaybackState.STATE_PLAYING;
-        playPauseButton.setText(playing ? "⏸" : "▶");
-    }
-
-    private MediaController.TransportControls controls() {
-        if (controller == null) attachController();
-        return controller == null ? null : controller.getTransportControls();
-    }
-
-    private void togglePlayPause() {
-        MediaController.TransportControls c = controls();
-        if (c == null) return;
-        PlaybackState state = controller.getPlaybackState();
-        if (state != null && state.getState() == PlaybackState.STATE_PLAYING) {
-            c.pause();
-        } else {
-            c.play();
-        }
-    }
-
-    /** Steering wheel and head unit media keys. */
-    @Override
-    public boolean onKeyUp(int keyCode, KeyEvent event) {
-        MediaController.TransportControls c;
-        switch (keyCode) {
-            case KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE:
-            case KeyEvent.KEYCODE_HEADSETHOOK:
-                togglePlayPause();
-                return true;
-            case KeyEvent.KEYCODE_MEDIA_NEXT:
-                c = controls();
-                if (c != null) c.skipToNext();
-                return true;
-            case KeyEvent.KEYCODE_MEDIA_PREVIOUS:
-                c = controls();
-                if (c != null) c.skipToPrevious();
-                return true;
-            default:
-                return super.onKeyUp(keyCode, event);
-        }
     }
 
     // endregion
