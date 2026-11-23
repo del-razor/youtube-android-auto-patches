@@ -6,7 +6,6 @@ import app.morphe.patcher.extensions.InstructionExtensions.replaceInstruction
 import app.morphe.patcher.methodCall
 import app.morphe.patcher.patch.PatchException
 import app.morphe.patcher.patch.patch
-import app.morphe.patcher.patch.resourceFile
 import app.morphe.patcher.patch.resourceXml
 import app.morphe.patcher.util.matchAllMethodIndicesForEach
 import com.android.tools.smali.dexlib2.iface.instruction.FiveRegisterInstruction
@@ -29,32 +28,20 @@ private const val MEDIA_CODEC_CLASS = "Landroid/media/MediaCodec;"
  * (bundled in the extension) uses to draw a full screen on the car display.
  */
 private val androidAutoVideoResourcePatch = patch {
-    dependsOn(androidAutoResourcePatch)
+    dependsOn(carAppSupportPatch)
 
     execute {
-        // Rewrite the car app description written by the audio patch, adding projection.
-        // Same set of entries Fermata Auto declares.
-        resourceFile("res/xml/$CAR_APP_DESCRIPTION_NAME.xml", false).apply {
-            parentFile.mkdirs()
-            writeText(
-                """
-                <?xml version="1.0" encoding="utf-8"?>
-                <automotiveApp>
-                    <uses name="media" />
-                    <uses name="service" />
-                    <uses name="projection" />
-                </automotiveApp>
-                """.trimIndent()
-            )
-        }
+        // Same entries Fermata Auto declares for its car screen.
+        addCarAppUse("service")
+        addCarAppUse("projection")
 
         resourceXml("AndroidManifest.xml").use { manifest ->
             val application = manifest.elements("application").first()
 
             application.appendChild("service") {
                 setAttribute("android:name", CAR_VIDEO_SERVICE_CLASS)
-                // The name shown in the Android Auto launcher, next to the audio entry.
-                setAttribute("android:label", "YouTube Video")
+                // The name shown in the Android Auto launcher.
+                setAttribute("android:label", "YouTube")
                 setAttribute("android:exported", "true")
                 appendChild("intent-filter") {
                     appendChild("action") {
@@ -75,20 +62,19 @@ private val androidAutoVideoResourcePatch = patch {
 @Suppress("unused")
 val androidAutoVideoPatch = patch(
     name = "Android Auto video",
-    description = "Adds a YouTube Video screen to Android Auto that shows YouTube's own player " +
+    description = "Adds a YouTube screen to Android Auto that shows YouTube's own player " +
             "on the car display, following the car's own 'video allowed' signal. Android Auto " +
             "only lists it when the patched app is installed with the Play Store as installer, " +
             "for example with KingInstaller.",
-    default = false,
+    default = true,
 ) {
     compatibleWith(COMPATIBILITY_YOUTUBE)
 
     dependsOn(
-        androidAutoPatch,
+        carAppSupportPatch,
+        mediaSessionHookPatch,
         androidAutoVideoResourcePatch,
     )
-
-    extendWith("extensions/extension.mpe")
 
     execute {
         // YouTube decodes video with android.media.MediaCodec. Route every configure() and

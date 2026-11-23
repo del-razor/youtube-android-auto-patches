@@ -14,7 +14,7 @@ Add this repo URL as a patch source in Morphe Manager: https://github.com/del-ra
   <img src=".github/assets/add-to-morphe.svg" alt="Add to Morphe" height="48">
 </a>
 
-Then patch YouTube with the official patches you already use **plus** the "Android Auto" patch from this bundle.
+Then patch YouTube with the official patches you already use **plus** "Android Auto video" from this bundle.
 
 ## 🩹 Patches list
 
@@ -47,7 +47,7 @@ YouTube app has neither, so this patch adds them:
 
 A second, optional patch that puts YouTube's real video on the car display.
 
-- Android Auto lists it as **YouTube Video**. It uses the unofficial Android Auto SDK that
+- Android Auto lists it as **YouTube**. It works without the audio patch. It uses the unofficial Android Auto SDK that
   Fermata Auto uses (`extensions/extension/libs/aauto.aar`) to draw a full screen on the car.
 - Every `MediaCodec.configure()` and `setOutputSurface()` call in YouTube is routed through
   `CarVideoBridge`. While the car screen is open and video is allowed, YouTube's video decoder
