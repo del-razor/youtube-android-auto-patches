@@ -1,3 +1,9 @@
+## [1.0.0-dev.4](https://github.com/del-razor/youtube-android-auto-patches/compare/v1.0.0-dev.3...v1.0.0-dev.4) (2026-11-23)
+
+### 🐛 Bug Fixes
+
+* Move all bundled androidx classes to the private package ([9d24414](https://github.com/del-razor/youtube-android-auto-patches/commit/9d24414c6d49c42034f3ed6e230f6e8fee7cb131))
+
 ## [1.0.0-dev.3](https://github.com/del-razor/youtube-android-auto-patches/compare/v1.0.0-dev.2...v1.0.0-dev.3) (2026-11-23)
 
 ### 🐛 Bug Fixes
