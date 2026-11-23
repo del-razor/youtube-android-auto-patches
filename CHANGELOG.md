@@ -1,3 +1,9 @@
+## [1.0.0-dev.5](https://github.com/del-razor/youtube-android-auto-patches/compare/v1.0.0-dev.4...v1.0.0-dev.5) (2026-11-23)
+
+### 🐛 Bug Fixes
+
+* Drop androidx startup and profile installer from the extension ([2a53b8a](https://github.com/del-razor/youtube-android-auto-patches/commit/2a53b8af3f8104c1e0c72b6f9993322dea8fab46))
+
 ## [1.0.0-dev.4](https://github.com/del-razor/youtube-android-auto-patches/compare/v1.0.0-dev.3...v1.0.0-dev.4) (2026-11-23)
 
 ### 🐛 Bug Fixes

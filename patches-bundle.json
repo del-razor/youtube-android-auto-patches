@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-11-23T15:43:10",
-  "description": "## [1.0.0-dev.4](https://github.com/del-razor/youtube-android-auto-patches/compare/v1.0.0-dev.3...v1.0.0-dev.4) (2026-11-23)\n\n### 🐛 Bug Fixes\n\n* Move all bundled androidx classes to the private package ([9d24414](https://github.com/del-razor/youtube-android-auto-patches/commit/9d24414c6d49c42034f3ed6e230f6e8fee7cb131))",
-  "download_url": "https://github.com/del-razor/youtube-android-auto-patches/releases/download/v1.0.0-dev.4/patches-1.0.0-dev.4.mpp",
+  "created_at": "2026-11-23T15:46:48",
+  "description": "## [1.0.0-dev.5](https://github.com/del-razor/youtube-android-auto-patches/compare/v1.0.0-dev.4...v1.0.0-dev.5) (2026-11-23)\n\n### 🐛 Bug Fixes\n\n* Drop androidx startup and profile installer from the extension ([2a53b8a](https://github.com/del-razor/youtube-android-auto-patches/commit/2a53b8af3f8104c1e0c72b6f9993322dea8fab46))",
+  "download_url": "https://github.com/del-razor/youtube-android-auto-patches/releases/download/v1.0.0-dev.5/patches-1.0.0-dev.5.mpp",
   "signature_download_url": "",
-  "version": "1.0.0-dev.4"
+  "version": "1.0.0-dev.5"
 }
