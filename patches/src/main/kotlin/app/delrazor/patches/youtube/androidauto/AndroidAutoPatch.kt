@@ -14,7 +14,7 @@ import com.android.tools.smali.dexlib2.iface.instruction.Instruction
 import com.android.tools.smali.dexlib2.iface.instruction.RegisterRangeInstruction
 import java.util.logging.Logger
 
-private const val EXTENSION_PACKAGE = "Lapp/delrazor/extension/"
+internal const val EXTENSION_PACKAGE = "Lapp/delrazor/extension/"
 
 private const val BRIDGE_CLASS =
     "Lapp/delrazor/extension/youtube/androidauto/AndroidAutoBridge;"
@@ -22,7 +22,7 @@ private const val BRIDGE_CLASS =
 private const val MEDIA_SERVICE_CLASS =
     "app.delrazor.extension.youtube.androidauto.AndroidAutoMediaService"
 
-private const val CAR_APP_DESCRIPTION_NAME = "delrazor_android_auto_app_desc"
+internal const val CAR_APP_DESCRIPTION_NAME = "delrazor_android_auto_app_desc"
 
 /**
  * Android Auto lists a media app when its manifest has:
@@ -33,7 +33,7 @@ private const val CAR_APP_DESCRIPTION_NAME = "delrazor_android_auto_app_desc"
  *
  * YouTube has neither, so this resource step adds both.
  */
-private val androidAutoResourcePatch = patch {
+internal val androidAutoResourcePatch = patch {
     execute {
         // The car app description file. Written as a new file in res/xml.
         // UNTESTED: assumes the patcher compiles a new res/xml file written this way,

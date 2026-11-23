@@ -5,8 +5,10 @@ smali = "5eaff5a2c9"
 gson = "2.15.0"
 animalsniffer = "2.0.1"
 gummy-bears = "0.16.0"
+androidx-fragment = "1.8.5"
 
 [libraries]
+androidx-fragment = { module = "androidx.fragment:fragment", version.ref = "androidx-fragment" }
 gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
 android-api-signature = { module = "com.toasttab.android:gummy-bears-api-26", version.ref = "gummy-bears" }
 # Gradle plugins adds the dependency during build, this declaration is here only for dependabot to provide updates.

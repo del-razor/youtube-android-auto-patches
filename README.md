@@ -43,10 +43,40 @@ YouTube app has neither, so this patch adds them:
    The car's browse list holds one item, "now playing".
 4. **Caller check:** only Android Auto, Google system apps and the phone's system UI may connect.
 
+## Android Auto video (experimental)
+
+A second, optional patch that puts YouTube's real video on the car display.
+
+- Android Auto lists it as **YouTube Video**. It uses the unofficial Android Auto SDK that
+  Fermata Auto uses (`extensions/extension/libs/aauto.aar`) to draw a full screen on the car.
+- Every `MediaCodec.configure()` and `setOutputSurface()` call in YouTube is routed through
+  `CarVideoBridge`. While the car screen is open and video is allowed, YouTube's video decoder
+  draws on the car's surface instead of the phone. Audio and YouTube's own player are untouched.
+- The screen follows the car's driving status. Its "no video" flag is what the head unit tells
+  Android Auto. When the car allows video, it plays. When it does not, the screen shows artwork
+  and the title while audio keeps playing. The patch never fakes or ignores this flag.
+  A small readout in the top right corner shows the flag the car is sending.
+- Protected (DRM) videos stay on the phone.
+
+**Install requirement:** Android Auto only lists screen-drawing apps whose install record says
+the Play Store installed them. "Unknown sources" does not cover them. Install the patched APK
+with KingInstaller or a similar tool that opens the
+system installer with the Play Store as installer, and repeat that for every update. Morphe
+Manager's normal install and `adb install -i com.android.vending` are rejected by current Android
+Auto ([details](https://github.com/AndreyPavlenko/Fermata/issues/846)).
+
+**Untested risks:**
+- `Car.createCar()` from the SDK may not connect from inside a car screen. Then the readout
+  shows "car API error" and video stays off.
+- YouTube may stop decoding video when its phone screen is off. Then the car screen stays black
+  with audio playing. Keeping YouTube open on the phone, or in picture-in-picture, avoids this.
+- The SDK may need resources YouTube does not have, or clash with YouTube's own androidx
+  classes. Check `adb logcat -s DelrazorAndroidAuto AndroidRuntime` if the screen crashes.
+
 ## What it does not do
 
-- **No video on the car screen.** Android Auto gives media apps only a browse list and a
-  now-playing screen.
+- **No video from the audio patch.** Android Auto gives media apps only a browse list and a
+  now-playing screen. Video needs the separate "Android Auto video" patch.
 - **No browsing from the car (yet).** Start a video on the phone, then control it from the car.
   Subscriptions, Watch later and search from the car would be a later version.
 
