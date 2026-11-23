@@ -19,6 +19,13 @@ android {
     }
 }
 
+// Not needed in the car screen. Their classes are kept by name because the extension's own
+// manifest references them, and YouTube has classes with the same names.
+configurations.configureEach {
+    exclude(group = "androidx.profileinstaller", module = "profileinstaller")
+    exclude(group = "androidx.startup", module = "startup-runtime")
+}
+
 dependencies {
     // Unofficial Android Auto SDK (2019), taken from Fermata Auto
     // (https://github.com/AndreyPavlenko/Fermata, fermata/lib/auto/aauto.aar).
