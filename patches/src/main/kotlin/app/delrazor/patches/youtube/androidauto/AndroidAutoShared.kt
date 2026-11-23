@@ -17,6 +17,16 @@ internal const val EXTENSION_PACKAGE = "Lapp/delrazor/extension/"
 
 internal const val MEDIA_BROWSER_ACTION = "android.media.browse.MediaBrowserService"
 
+/**
+ * YouTube's own Android Auto entry points. YouTube ships a Car App Library app (listed in the car
+ * as "YouTube", Premium audio only) and a media browser service. Both show as extra launcher
+ * entries next to ours, so their intent actions are removed. The services stay in the app.
+ */
+internal val YOUTUBE_CAR_ENTRY_ACTIONS = setOf(
+    MEDIA_BROWSER_ACTION,
+    "androidx.car.app.CarAppService",
+)
+
 private const val BRIDGE_CLASS =
     "Lapp/delrazor/extension/youtube/androidauto/AndroidAutoBridge;"
 
@@ -60,12 +70,13 @@ internal val carAppSupportPatch = patch {
             }
 
             manifest.elements("action")
-                .filter { it.attribute("android:name") == MEDIA_BROWSER_ACTION }
+                .filter { it.attribute("android:name") in YOUTUBE_CAR_ENTRY_ACTIONS }
                 .toList()
                 .forEach { action ->
                     val intentFilter = action.parent!!
                     Logger.getLogger(this::class.java.name).info(
-                        "Android Auto: hiding YouTube's media browser service " +
+                        "Android Auto: hiding YouTube's own car entry " +
+                                "${action.attribute("android:name")} on " +
                                 intentFilter.parent?.attribute("android:name")
                     )
                     action.remove()
