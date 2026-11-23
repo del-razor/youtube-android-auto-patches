@@ -4,6 +4,19 @@ extension {
 
 android {
     namespace = "app.delrazor.extension"
+
+    buildTypes {
+        named("release") {
+            optimization {
+                keepRules {
+                    // The keep rules that androidx ships would keep some androidx classes under
+                    // their real names, and those would merge with YouTube's copies.
+                    // Ignore them so R8 can move every bundled class (see proguard-rules.pro).
+                    ignoreFromAllExternalDependencies(true)
+                }
+            }
+        }
+    }
 }
 
 dependencies {
