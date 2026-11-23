@@ -1,11 +1,45 @@
 {
   "NOTE": "Do NOT manually edit this file. This file is automatically updated when semantic release (release.yml) runs. Manually editing this file can break your releases and break third party tools that use this file.",
-  "version": "1.0.0-dev.1",
+  "version": "1.0.0-dev.2",
   "patches": [
     {
       "name": "Android Auto",
       "description": "Shows YouTube in Android Auto. What YouTube plays in the background appears on the car screen with play, pause, skip and seek controls. Audio only: Android Auto does not allow video. Needs the background playback patch, and Android Auto's 'Unknown sources' developer setting unless the app was installed by the Play Store.",
       "default": true,
+      "category": null,
+      "compatiblePackages": [
+        {
+          "packageName": "com.google.android.youtube",
+          "name": "YouTube",
+          "description": null,
+          "apkFileType": "APK_REQUIRED",
+          "appIconColor": "#FF0033",
+          "signatures": null,
+          "formFactor": "MOBILE",
+          "targets": [
+            {
+              "version": null,
+              "versionCodes": null,
+              "isExperimental": true,
+              "minSdk": null,
+              "description": null
+            },
+            {
+              "version": "21.30.216",
+              "versionCodes": null,
+              "isExperimental": true,
+              "minSdk": 29,
+              "description": null
+            }
+          ]
+        }
+      ],
+      "options": []
+    },
+    {
+      "name": "Android Auto video",
+      "description": "Adds a YouTube Video screen to Android Auto that shows YouTube's own player on the car display, following the car's own 'video allowed' signal. Android Auto only lists it when the patched app is installed with the Play Store as installer, for example with KingInstaller.",
+      "default": false,
       "category": null,
       "compatiblePackages": [
         {
