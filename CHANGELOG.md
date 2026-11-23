@@ -1,3 +1,9 @@
+## [1.0.0-dev.3](https://github.com/del-razor/youtube-android-auto-patches/compare/v1.0.0-dev.2...v1.0.0-dev.3) (2026-11-23)
+
+### 🐛 Bug Fixes
+
+* Car video screen crash and empty Android Auto entry ([c3f3ebd](https://github.com/del-razor/youtube-android-auto-patches/commit/c3f3ebdd7adcdd5c59f4ca0c3aa3535e9b424b28))
+
 ## [1.0.0-dev.2](https://github.com/del-razor/youtube-android-auto-patches/compare/v1.0.0-dev.1...v1.0.0-dev.2) (2026-11-23)
 
 ### ✨ New Features
