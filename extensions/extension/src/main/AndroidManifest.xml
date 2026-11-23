@@ -1,6 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- Shizuku's API library asks for Android 7 (API 24). YouTube itself needs Android 10, so the
+         extension never runs below that. -->
+    <uses-sdk tools:overrideLibrary="rikka.shizuku.api" />
+
     <!-- Keeps androidx.core's CoreComponentFactory out of the extension. It would be kept
          under its real name, and YouTube has its own class with that name. -->
     <application tools:remove="android:appComponentFactory" />
