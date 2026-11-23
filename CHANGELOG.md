@@ -4,6 +4,12 @@
 
 * hide YouTube's built-in Android Auto app so only one entry shows ([509660f](https://github.com/del-razor/youtube-android-auto-patches/commit/509660f80606975c35303a7b94488e9d113b7308))
 
+## [1.0.0-dev.10](https://github.com/del-razor/youtube-android-auto-patches/compare/v1.0.0-dev.9...v1.0.0-dev.10) (2026-11-23)
+
+### 🐛 Bug Fixes
+
+* hide YouTube's built-in Android Auto app so only one entry shows ([509660f](https://github.com/del-razor/youtube-android-auto-patches/commit/509660f80606975c35303a7b94488e9d113b7308))
+
 ## [1.0.0-dev.9](https://github.com/del-razor/youtube-android-auto-patches/compare/v1.0.0-dev.8...v1.0.0-dev.9) (2026-11-23)
 
 ### 🐛 Bug Fixes
