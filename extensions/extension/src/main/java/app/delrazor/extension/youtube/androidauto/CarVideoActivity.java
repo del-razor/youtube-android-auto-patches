@@ -90,10 +90,12 @@ public class CarVideoActivity extends CarActivity
     public void onStart() {
         super.onStart();
         attachController();
+        mainHandler.post(statusTicker);
     }
 
     @Override
     public void onStop() {
+        mainHandler.removeCallbacks(statusTicker);
         detachController();
         super.onStop();
     }
@@ -257,8 +259,18 @@ public class CarVideoActivity extends CarActivity
         if (statusView == null) return;
         String flag = carAllowsVideo == null ? "unknown"
                 : (carAllowsVideo ? "allowed" : "not allowed");
-        statusView.setText("Car video flag: " + flag + " (" + statusText + ")");
+        statusView.setText("Car video flag: " + flag + " (" + statusText + ")\n"
+                + CarVideoBridge.debugSummary());
     }
+
+    /** Refreshes the readout once a second while the screen is open. */
+    private final Runnable statusTicker = new Runnable() {
+        @Override
+        public void run() {
+            updateStatusView();
+            mainHandler.postDelayed(this, 1000);
+        }
+    };
 
     // endregion
 

@@ -86,6 +86,9 @@ val androidAutoVideoPatch = patch(
             throw PatchException("Could not find where YouTube sets up its video decoder")
         }
         val setSurfaceCount = redirectMediaCodecCall("setOutputSurface")
+        // For the diagnostics on the car screen: frames drawn, and decoders released.
+        redirectMediaCodecCall("releaseOutputBuffer")
+        redirectMediaCodecCall("release")
 
         Logger.getLogger(this::class.java.name).info(
             "Android Auto video: redirected $configureCount configure and " +

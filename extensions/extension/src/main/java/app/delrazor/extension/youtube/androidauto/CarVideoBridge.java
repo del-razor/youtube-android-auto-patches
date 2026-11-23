@@ -88,6 +88,7 @@ public final class CarVideoBridge {
         synchronized (lock) {
             DecoderState state = decoders.get(codec);
             if (state != null) {
+                event("YouTube switched its video surface");
                 state.youTubeSurface = surface;
                 if (carSurface != null && !state.secure) {
                     target = carSurface;
@@ -98,6 +99,74 @@ public final class CarVideoBridge {
             }
         }
         codec.setOutputSurface(target);
+    }
+
+    /** Replaces {@link MediaCodec#releaseOutputBuffer(int, boolean)}. */
+    public static void releaseOutputBuffer(MediaCodec codec, int index, boolean render) {
+        if (render) countFrame(codec);
+        codec.releaseOutputBuffer(index, render);
+    }
+
+    /** Replaces {@link MediaCodec#releaseOutputBuffer(int, long)}. Always renders. */
+    public static void releaseOutputBuffer(MediaCodec codec, int index, long renderTimestampNs) {
+        countFrame(codec);
+        codec.releaseOutputBuffer(index, renderTimestampNs);
+    }
+
+    /** Replaces {@link MediaCodec#release()}. */
+    public static void release(MediaCodec codec) {
+        boolean wasVideo;
+        synchronized (lock) {
+            wasVideo = decoders.remove(codec) != null;
+        }
+        if (wasVideo) event("YouTube released a video decoder");
+        codec.release();
+    }
+
+    // endregion
+
+    // region Diagnostics shown on the car screen
+
+    private static volatile String lastEvent = "no video decoder yet";
+    private static volatile long lastEventTime;
+    private static volatile int framesToCar;
+    private static volatile int framesToPhone;
+    private static volatile long lastFrameTime;
+
+    private static void event(String text) {
+        lastEvent = text;
+        lastEventTime = System.currentTimeMillis();
+        Log.d(TAG, text);
+    }
+
+    private static void countFrame(MediaCodec codec) {
+        DecoderState state;
+        synchronized (lock) {
+            state = decoders.get(codec);
+        }
+        if (state == null) return; // Not a video decoder.
+        if (state.onCar) framesToCar++; else framesToPhone++;
+        lastFrameTime = System.currentTimeMillis();
+    }
+
+    /** One line for the car screen, for example "1 decoder, 1 on car, 412 frames to car". */
+    static String debugSummary() {
+        int total;
+        int onCar = 0;
+        synchronized (lock) {
+            total = decoders.size();
+            for (DecoderState state : decoders.values()) {
+                if (state.onCar) onCar++;
+            }
+        }
+        long now = System.currentTimeMillis();
+        String frameAge = lastFrameTime == 0 ? "never"
+                : ((now - lastFrameTime) / 1000) + "s ago";
+        String eventAge = lastEventTime == 0 ? ""
+                : " (" + ((now - lastEventTime) / 1000) + "s ago)";
+        return total + " video decoder(s), " + onCar + " on car\n"
+                + "frames: " + framesToCar + " to car, " + framesToPhone + " to phone, last " + frameAge + "\n"
+                + "last: " + lastEvent + eventAge;
     }
 
     // endregion
@@ -122,9 +191,11 @@ public final class CarVideoBridge {
 
                 if (carSurface != null && !secure) {
                     state.onCar = true;
-                    Log.d(TAG, "Video decoder configured on the car screen");
+                    event("YouTube started a video decoder, sent to car");
                     return carSurface;
                 }
+                event(secure ? "YouTube started a protected (DRM) video decoder, kept on phone"
+                        : "YouTube started a video decoder, on phone");
             }
         } catch (Exception ex) {
             Log.e(TAG, "onConfigure failure", ex);
@@ -185,8 +256,8 @@ public final class CarVideoBridge {
         for (int i = 0; i < toPhone.size(); i++) {
             switchSurface(toPhone.get(i), phoneSurfaces.get(i));
         }
-        Log.d(TAG, "Car surface " + (carSurface != null ? "set" : "cleared")
-                + ", moved " + toCar.size() + " to car, " + toPhone.size() + " to phone");
+        event("Car screen " + (carSurface != null ? "ready" : "closed")
+                + ", moved " + toCar.size() + " decoder(s) to car, " + toPhone.size() + " to phone");
     }
 
     private static void switchSurface(MediaCodec codec, Surface surface) {
@@ -201,7 +272,7 @@ public final class CarVideoBridge {
         } catch (Exception ex) {
             // The decoder was released, or YouTube is reconfiguring it.
             // The next configure() call picks up the right surface.
-            Log.d(TAG, "Could not switch decoder surface: " + ex);
+            event("Could not switch decoder surface: " + ex.getClass().getSimpleName());
         }
     }
 
