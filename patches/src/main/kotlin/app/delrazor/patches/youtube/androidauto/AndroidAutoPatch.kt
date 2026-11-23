@@ -22,6 +22,8 @@ private const val BRIDGE_CLASS =
 private const val MEDIA_SERVICE_CLASS =
     "app.delrazor.extension.youtube.androidauto.AndroidAutoMediaService"
 
+private const val MEDIA_BROWSER_ACTION = "android.media.browse.MediaBrowserService"
+
 internal const val CAR_APP_DESCRIPTION_NAME = "delrazor_android_auto_app_desc"
 
 /**
@@ -63,6 +65,24 @@ internal val androidAutoResourcePatch = patch {
 
             val application = manifest.elements("application").first()
 
+            // Android Auto lists one entry per media browser service. Testing on YouTube 21.30.216
+            // showed an extra entry that only says "No items", most likely a media browser
+            // service YouTube already has. Take any existing one out of the media browser
+            // lookup, so only ours is listed. The build log names what was hidden.
+            manifest.elements("action")
+                .filter { it.attribute("android:name") == MEDIA_BROWSER_ACTION }
+                .toList()
+                .forEach { action ->
+                    val intentFilter = action.parent!!
+                    val service = intentFilter.parent
+                    Logger.getLogger(this::class.java.name).info(
+                        "Android Auto: hiding existing media browser service " +
+                                service?.attribute("android:name")
+                    )
+                    action.remove()
+                    if (intentFilter.children.isEmpty()) intentFilter.remove()
+                }
+
             application.appendChild("meta-data") {
                 setAttribute("android:name", "com.google.android.gms.car.application")
                 setAttribute("android:resource", "@xml/$CAR_APP_DESCRIPTION_NAME")
@@ -75,7 +95,7 @@ internal val androidAutoResourcePatch = patch {
                 setAttribute("android:exported", "true")
                 appendChild("intent-filter") {
                     appendChild("action") {
-                        setAttribute("android:name", "android.media.browse.MediaBrowserService")
+                        setAttribute("android:name", MEDIA_BROWSER_ACTION)
                     }
                 }
             }

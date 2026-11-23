@@ -19,3 +19,12 @@ pluginManagement {
 plugins {
     id("app.morphe.patches") version "2.1.2"
 }
+
+settings {
+    extensions {
+        // Shrinks the extension and moves bundled libraries (androidx, Kotlin) to a private
+        // package, so they cannot clash with YouTube's own copies of those classes.
+        // Must be an absolute path.
+        proguardFiles(rootProject.projectDir.resolve("extensions/proguard-rules.pro").toString())
+    }
+}
