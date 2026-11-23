@@ -3,8 +3,9 @@
 A Morphe patch bundle that makes the YouTube app show up in Android Auto.
 Use it in Morphe Manager next to the official Morphe patches.
 
-> **Status: first version, not yet built or tested on a device.**
-> See "What still needs checking" below.
+> **Status: experimental.** Builds come from GitHub Actions. The car entry, the car connection and the
+> driving-status flag work on a Pixel 7 Pro with Open Head Unit; opening YouTube on the car display is
+> still being tested.
 
 ### How to use these patches
 
@@ -48,6 +49,8 @@ YouTube app has neither, so this patch adds them:
 Runs the real YouTube app on the car screen, so the phone is not needed at all.
 
 - Android Auto lists it as **YouTube**. It works without the audio patch.
+- YouTube's own built-in Android Auto app (Premium audio only) and its media browser are hidden,
+  so this is the only YouTube entry in the car launcher.
 - It uses the unofficial Android Auto SDK that Fermata Auto uses
   (`extensions/extension/libs/aauto.aar`) to get a full screen on the car display.
 - That screen creates a private virtual display, the size of the car screen, and opens
@@ -81,23 +84,25 @@ Auto ([details](https://github.com/AndreyPavlenko/Fermata/issues/846)).
 
 - **No video from the audio patch.** Android Auto gives media apps only a browse list and a
   now-playing screen. Video needs the separate "Android Auto video" patch.
-- **No browsing from the car (yet).** Start a video on the phone, then control it from the car.
-  Subscriptions, Watch later and search from the car would be a later version.
+- **The audio patch has no browsing.** It only mirrors what is playing on the phone. The video
+  patch is the one that gives the full YouTube app, with home, search and subscriptions, on the car.
 
 ## Setup on the phone
 
 1. Patch YouTube with:
    - the official Morphe patches, including **background playback** (otherwise YouTube stops when
      the screen is off), and
-   - **Android Auto** from this bundle.
-2. **Let Android Auto show a sideloaded app.** Android Auto hides media apps that the Play Store did
+   - **Android Auto video** from this bundle.
+2. Install the patched APK with KingInstaller (see the install requirement above). The steps below
+   only apply to the optional audio patch.
+3. **Let Android Auto show a sideloaded audio app.** Android Auto hides media apps that the Play Store did
    not install. The official "Change installer source" patch does **not** fix this: it only changes
    what YouTube reports about itself, and Android Auto asks Android directly. Use one of these:
    - Android Auto settings → tap **Version** 10 times → ⋮ menu → **Developer settings** →
      turn on **Unknown sources**. *(Easiest.)*
    - or install the patched APK with the Play Store set as installer, for example over ADB:
      `adb install -i com.android.vending patched-youtube.apk`
-3. Connect to the car (or the Desktop Head Unit), open the Android Auto app launcher and look for YouTube.
+4. Connect to the car (or the Desktop Head Unit), open the Android Auto app launcher and look for YouTube.
    If it is missing, open the launcher's "Customize" list on the phone and enable it.
 
 ## What still needs checking
