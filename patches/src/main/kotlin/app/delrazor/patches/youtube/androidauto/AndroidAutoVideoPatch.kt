@@ -1,8 +1,17 @@
 package app.delrazor.patches.youtube.androidauto
 
 import app.delrazor.patches.youtube.shared.Constants.COMPATIBILITY_YOUTUBE
+import app.morphe.patcher.extensions.InstructionExtensions.getInstruction
+import app.morphe.patcher.extensions.InstructionExtensions.replaceInstruction
+import app.morphe.patcher.methodCall
+import app.morphe.patcher.patch.PatchException
 import app.morphe.patcher.patch.patch
 import app.morphe.patcher.patch.resourceXml
+import app.morphe.patcher.util.matchAllMethodIndicesForEach
+import com.android.tools.smali.dexlib2.iface.instruction.FiveRegisterInstruction
+import com.android.tools.smali.dexlib2.iface.instruction.Instruction
+import com.android.tools.smali.dexlib2.iface.instruction.RegisterRangeInstruction
+import java.util.logging.Logger
 
 private const val CAR_VIDEO_SERVICE_CLASS =
     "app.delrazor.extension.youtube.androidauto.CarVideoService"
@@ -74,6 +83,65 @@ private val androidAutoVideoResourcePatch = patch {
     }
 }
 
+private const val AUDIO_SYNC_CLASS = "Lapp/delrazor/extension/youtube/androidauto/CarAudioSync;"
+
+/**
+ * Lets the car screen shift YouTube's audio against the video. The car shows video later than it
+ * plays sound, because the picture is encoded and streamed to the head unit.
+ *
+ * YouTube's player times video frames by how far the framework AudioTrack has played. Its calls to
+ * AudioTrack.getPlaybackHeadPosition() and AudioTrack.getTimestamp() are sent through
+ * CarAudioSync, which reports the position a set number of milliseconds ahead while the car
+ * screen is open. Video frames then show earlier, which lines them up with the late car picture.
+ * Framework names are never obfuscated, so this needs no version-specific fingerprints.
+ */
+private val carAudioSyncHookPatch = patch {
+    extendWith("extensions/extension.mpe")
+
+    execute {
+        val hooks = listOf(
+            "getPlaybackHeadPosition" to "(Landroid/media/AudioTrack;)I",
+            "getTimestamp" to "(Landroid/media/AudioTrack;Landroid/media/AudioTimestamp;)Z",
+        )
+        var hookCount = 0
+
+        hooks.forEach { (name, staticSignature) ->
+            methodCall(
+                definingClass = "Landroid/media/AudioTrack;",
+                name = name,
+            ).matchAllMethodIndicesForEach(requireMatches = false) { index ->
+                if (definingClass.startsWith(EXTENSION_PACKAGE)) return@matchAllMethodIndicesForEach
+
+                // The instance call and the static call take the same registers: the AudioTrack,
+                // then the arguments.
+                val replacement = when (val instruction = getInstruction<Instruction>(index)) {
+                    is FiveRegisterInstruction -> {
+                        val registers = listOf(
+                            instruction.registerC, instruction.registerD, instruction.registerE,
+                            instruction.registerF, instruction.registerG,
+                        ).take(instruction.registerCount)
+                        "invoke-static { ${registers.joinToString { "v$it" }} }, " +
+                                "$AUDIO_SYNC_CLASS->$name$staticSignature"
+                    }
+                    is RegisterRangeInstruction -> {
+                        val last = instruction.startRegister + instruction.registerCount - 1
+                        "invoke-static/range { v${instruction.startRegister} .. v$last }, " +
+                                "$AUDIO_SYNC_CLASS->$name$staticSignature"
+                    }
+                    else -> throw PatchException("Unexpected AudioTrack call: $instruction")
+                }
+                replaceInstruction(index, replacement)
+                hookCount++
+            }
+        }
+
+        // Not fatal: without the hooks the car screen still works, only the sync buttons do nothing.
+        Logger.getLogger(this::class.java.name).info(
+            "Android Auto: routed $hookCount AudioTrack position call(s) through the audio sync"
+        )
+    }
+}
+
 @Suppress("unused")
 val androidAutoVideoPatch = patch(
     name = "Android Auto video",
@@ -90,5 +158,6 @@ val androidAutoVideoPatch = patch(
         carAppSupportPatch,
         mediaSessionHookPatch,
         androidAutoVideoResourcePatch,
+        carAudioSyncHookPatch,
     )
 }

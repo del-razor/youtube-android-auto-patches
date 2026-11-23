@@ -28,10 +28,12 @@ import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.SurfaceHolder;
+import android.view.Surface;
 import android.view.SurfaceView;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import com.google.android.apps.auto.sdk.CarActivity;
@@ -67,6 +69,20 @@ public class CarVideoActivity extends CarActivity implements SurfaceHolder.Callb
 
     // Virtual display showing YouTube.
     private VirtualDisplay virtualDisplay;
+
+    // Trusted car display made through Shizuku (see CarDisplayService). Preferred: it keeps
+    // playing with the phone screen off, takes real touches and shows the keyboard on the car.
+    private static final int HOST_CONNECTING = 0;
+    private static final int HOST_READY = 1;
+    private static final int HOST_UNAVAILABLE = 2;
+    private CarDisplayHost displayHost;
+    private int hostState = HOST_CONNECTING;
+    private String hostStatus = "connecting";
+    private boolean remoteDisplay;
+    private Surface carSurface;
+    private int carWidth;
+    private int carHeight;
+    private int carDpi;
     private boolean launchRequested;
     private String launchStatus = "starting";
 
@@ -100,9 +116,32 @@ public class CarVideoActivity extends CarActivity implements SurfaceHolder.Callb
         }
 
         registerActivityTracking();
+        CarAudioSync.load(this);
+        CarAudioSync.setCarScreenOpen(true);
         setContentView(buildLayout());
         statusVisibleUntil = SystemClock.uptimeMillis() + 15000;
         connectCar();
+
+        displayHost = new CarDisplayHost(this, new CarDisplayHost.Listener() {
+            @Override
+            public void onConnected() {
+                hostState = HOST_READY;
+                hostStatus = "connected";
+                ensureDisplay();
+            }
+
+            @Override
+            public void onUnavailable(String reason, boolean waitingForUser) {
+                hostStatus = reason;
+                if (!waitingForUser && hostState != HOST_READY) {
+                    hostState = HOST_UNAVAILABLE;
+                    ensureDisplay();
+                }
+                statusVisibleUntil = Long.MAX_VALUE;
+                updateStatusView();
+            }
+        });
+        displayHost.connect();
     }
 
     @Override
@@ -120,7 +159,9 @@ public class CarVideoActivity extends CarActivity implements SurfaceHolder.Callb
     @Override
     public void onDestroy() {
         Log.d(TAG, "Car screen destroyed");
+        CarAudioSync.setCarScreenOpen(false);
         releaseVirtualDisplay();
+        if (displayHost != null) displayHost.close();
         disconnectCar();
         super.onDestroy();
     }
@@ -163,8 +204,108 @@ public class CarVideoActivity extends CarActivity implements SurfaceHolder.Callb
         statusParams.setMargins(dp(8), dp(8), dp(8), dp(8));
         root.addView(statusView, statusParams);
 
+        root.addView(buildSyncControls(), new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.BOTTOM | Gravity.START));
+
         return root;
     }
+
+    // region Audio delay buttons
+
+    private static final long SYNC_PANEL_HIDE_MS = 6000;
+    private LinearLayout syncPanel;
+    private TextView syncValue;
+
+    /**
+     * A small "A/V" button in the bottom left corner. It opens − and + buttons that delay the
+     * audio against the car picture, in 25 ms steps. The value is kept for next time.
+     */
+    private View buildSyncControls() {
+        LinearLayout bar = new LinearLayout(this);
+        bar.setOrientation(LinearLayout.HORIZONTAL);
+        bar.setGravity(Gravity.CENTER_VERTICAL);
+        bar.setPadding(dp(8), dp(8), dp(8), dp(8));
+
+        TextView toggle = syncButton("A/V");
+        toggle.setAlpha(0.55f);
+        toggle.setOnClickListener(v -> {
+            boolean show = syncPanel.getVisibility() != View.VISIBLE;
+            syncPanel.setVisibility(show ? View.VISIBLE : View.GONE);
+            toggle.setAlpha(show ? 1f : 0.55f);
+            scheduleSyncPanelHide(toggle);
+        });
+        bar.addView(toggle);
+
+        syncPanel = new LinearLayout(this);
+        syncPanel.setOrientation(LinearLayout.HORIZONTAL);
+        syncPanel.setGravity(Gravity.CENTER_VERTICAL);
+        syncPanel.setVisibility(View.GONE);
+
+        TextView minus = syncButton("\u2212");
+        TextView plus = syncButton("+");
+        syncValue = new TextView(this);
+        syncValue.setTextColor(Color.WHITE);
+        syncValue.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+        syncValue.setBackgroundColor(0xAA000000);
+        syncValue.setPadding(dp(12), dp(10), dp(12), dp(10));
+        minus.setOnClickListener(v -> {
+            changeAudioDelay(-CarAudioSync.STEP_MS);
+            scheduleSyncPanelHide(toggle);
+        });
+        plus.setOnClickListener(v -> {
+            changeAudioDelay(CarAudioSync.STEP_MS);
+            scheduleSyncPanelHide(toggle);
+        });
+
+        LinearLayout.LayoutParams gap = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        gap.setMargins(dp(8), 0, 0, 0);
+        syncPanel.addView(minus, gap);
+        syncPanel.addView(syncValue, new LinearLayout.LayoutParams(gap));
+        syncPanel.addView(plus, new LinearLayout.LayoutParams(gap));
+        bar.addView(syncPanel);
+
+        showAudioDelay();
+        return bar;
+    }
+
+    private TextView syncButton(String label) {
+        TextView button = new TextView(this);
+        button.setText(label);
+        button.setTextColor(Color.WHITE);
+        button.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18);
+        button.setGravity(Gravity.CENTER);
+        button.setMinWidth(dp(56));
+        button.setMinHeight(dp(48));
+        button.setBackgroundColor(0xAA000000);
+        button.setClickable(true);
+        return button;
+    }
+
+    private final Runnable hideSyncPanel = () -> {
+        if (syncPanel != null) syncPanel.setVisibility(View.GONE);
+    };
+
+    private void scheduleSyncPanelHide(View toggle) {
+        mainHandler.removeCallbacks(hideSyncPanel);
+        mainHandler.postDelayed(() -> {
+            hideSyncPanel.run();
+            toggle.setAlpha(0.55f);
+        }, SYNC_PANEL_HIDE_MS);
+    }
+
+    private void changeAudioDelay(int stepMs) {
+        CarAudioSync.setDelayMs(this, CarAudioSync.getDelayMs() + stepMs);
+        showAudioDelay();
+    }
+
+    private void showAudioDelay() {
+        int delay = CarAudioSync.getDelayMs();
+        syncValue.setText("Audio delay " + (delay > 0 ? "+" : "") + delay + " ms");
+    }
+
+    // endregion
 
     private int dp(int value) {
         return Math.round(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, value,
@@ -199,8 +340,10 @@ public class CarVideoActivity extends CarActivity implements SurfaceHolder.Callb
                 : (carAllowsVideo ? "allowed" : "not allowed");
         Activity activity = hostedActivity.get();
         statusView.setText("Car video flag: " + flag + " (" + statusText + ")\n"
-                + "Car display: " + (virtualDisplay == null ? "none"
-                : virtualDisplay.getDisplay().getDisplayId()) + ", " + launchStatus + "\n"
+                + "Car display: " + (hostedDisplayId == Display.INVALID_DISPLAY ? "none"
+                : hostedDisplayId + (remoteDisplay ? " (trusted)" : " (private)"))
+                + ", " + launchStatus + "\n"
+                + "Shizuku: " + hostStatus + "\n"
                 + "On car: " + (activity == null ? "nothing" : activity.getClass().getSimpleName()));
     }
 
@@ -215,27 +358,40 @@ public class CarVideoActivity extends CarActivity implements SurfaceHolder.Callb
     @Override
     public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
         if (width <= 0 || height <= 0) return;
-        int densityDpi = getResources().getDisplayMetrics().densityDpi;
+        carSurface = holder.getSurface();
+        carWidth = width;
+        carHeight = height;
+        carDpi = getResources().getDisplayMetrics().densityDpi;
+        ensureDisplay();
+    }
 
-        try {
-            if (virtualDisplay == null) {
-                DisplayManager displayManager =
-                        (DisplayManager) getApplicationContext().getSystemService(Context.DISPLAY_SERVICE);
-                // No flags: a private display only this app can show activities on.
-                virtualDisplay = displayManager.createVirtualDisplay(VIRTUAL_DISPLAY_NAME,
-                        width, height, densityDpi, holder.getSurface(),
-                        DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY);
-                hostedDisplayId = virtualDisplay.getDisplay().getDisplayId();
-                Log.d(TAG, "Car display " + hostedDisplayId + " created: "
-                        + width + "x" + height + " @" + densityDpi);
-            } else {
-                virtualDisplay.setSurface(holder.getSurface());
-                virtualDisplay.resize(width, height, densityDpi);
-            }
-        } catch (Exception ex) {
-            Log.e(TAG, "Could not create the car display", ex);
-            launchStatus = "display error: " + ex.getClass().getSimpleName();
+    /** Creates the car display once the car surface and the Shizuku answer are both there. */
+    private void ensureDisplay() {
+        if (carSurface == null || !carSurface.isValid()) return;
+
+        if (remoteDisplay) {
+            displayHost.setSurface(carSurface);
+            displayHost.resize(carWidth, carHeight, carDpi);
+        } else if (virtualDisplay != null) {
+            virtualDisplay.setSurface(carSurface);
+            virtualDisplay.resize(carWidth, carHeight, carDpi);
+        } else if (hostState == HOST_CONNECTING) {
+            launchStatus = "waiting for Shizuku";
             return;
+        } else {
+            if (hostState == HOST_READY) {
+                try {
+                    hostedDisplayId = displayHost.createDisplay(carSurface, carWidth, carHeight, carDpi);
+                    remoteDisplay = true;
+                    Log.d(TAG, "Trusted car display " + hostedDisplayId);
+                } catch (Exception ex) {
+                    Log.e(TAG, "Could not create the trusted car display", ex);
+                    hostState = HOST_UNAVAILABLE;
+                    hostStatus = "trusted display failed: " + ex.getMessage();
+                    statusVisibleUntil = Long.MAX_VALUE;
+                }
+            }
+            if (!remoteDisplay && !createLocalDisplay()) return;
         }
 
         if (!launchRequested) {
@@ -244,10 +400,37 @@ public class CarVideoActivity extends CarActivity implements SurfaceHolder.Callb
         }
     }
 
+    /**
+     * Fallback without Shizuku: a private display of our own. YouTube stops when the phone screen
+     * turns off, touches reach only YouTube's main window, and the keyboard cannot open there.
+     */
+    private boolean createLocalDisplay() {
+        try {
+            DisplayManager displayManager =
+                    (DisplayManager) getApplicationContext().getSystemService(Context.DISPLAY_SERVICE);
+            virtualDisplay = displayManager.createVirtualDisplay(VIRTUAL_DISPLAY_NAME,
+                    carWidth, carHeight, carDpi, carSurface,
+                    DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY);
+            hostedDisplayId = virtualDisplay.getDisplay().getDisplayId();
+            Log.d(TAG, "Private car display " + hostedDisplayId + " created: "
+                    + carWidth + "x" + carHeight + " @" + carDpi);
+            return true;
+        } catch (Exception ex) {
+            Log.e(TAG, "Could not create the car display", ex);
+            launchStatus = "display error: " + ex.getClass().getSimpleName();
+            return false;
+        }
+    }
+
     @Override
     public void surfaceDestroyed(SurfaceHolder holder) {
         // Keep the display, and YouTube on it, while the car hides this screen for a moment.
-        if (virtualDisplay != null) virtualDisplay.setSurface(null);
+        carSurface = null;
+        if (remoteDisplay) {
+            displayHost.setSurface(null);
+        } else if (virtualDisplay != null) {
+            virtualDisplay.setSurface(null);
+        }
     }
 
     private void launchYouTube() {
@@ -261,6 +444,22 @@ public class CarVideoActivity extends CarActivity implements SurfaceHolder.Callb
             // GUESS: YouTube's main activity allows a second task. If it does not, Android moves
             // the existing YouTube task to the car display instead, which also works.
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_MULTIPLE_TASK);
+
+            if (remoteDisplay) {
+                // Opened by the Shizuku service: this app has no window on screen yet, and
+                // Android blocks activity starts from apps in the background.
+                try {
+                    displayHost.launch(intent.getComponent());
+                    launchStatus = "opening YouTube";
+                } catch (Exception ex) {
+                    Log.e(TAG, "Shizuku could not open YouTube on the car display", ex);
+                    launchStatus = "launch error: " + ex.getMessage();
+                    statusVisibleUntil = Long.MAX_VALUE;
+                    return;
+                }
+                watchLaunch();
+                return;
+            }
 
             ActivityOptions options = ActivityOptions.makeBasic();
             options.setLaunchDisplayId(hostedDisplayId);
@@ -296,7 +495,7 @@ public class CarVideoActivity extends CarActivity implements SurfaceHolder.Callb
 
     private void watchLaunch() {
         mainHandler.postDelayed(() -> {
-            if (hostedActivity.get() == null && virtualDisplay != null) {
+            if (hostedActivity.get() == null && hostedDisplayId != Display.INVALID_DISPLAY) {
                 launchStatus = "YouTube did not open on the car display";
                 statusVisibleUntil = Long.MAX_VALUE;
             }
@@ -318,6 +517,10 @@ public class CarVideoActivity extends CarActivity implements SurfaceHolder.Callb
         if (virtualDisplay != null) {
             virtualDisplay.release();
             virtualDisplay = null;
+        }
+        if (remoteDisplay) {
+            displayHost.release();
+            remoteDisplay = false;
         }
         hostedDisplayId = Display.INVALID_DISPLAY;
         launchRequested = false;
@@ -368,11 +571,16 @@ public class CarVideoActivity extends CarActivity implements SurfaceHolder.Callb
 
     /** The car screen and the virtual display are the same size, so coordinates map 1:1. */
     private boolean forwardTouch(MotionEvent event) {
-        Activity activity = hostedActivity.get();
-        if (activity == null) return false;
-        if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+        if (event.getActionMasked() == MotionEvent.ACTION_DOWN && hostedActivity.get() != null) {
             statusVisibleUntil = 0; // Hide the readout once the user starts using YouTube.
         }
+        if (remoteDisplay && displayHost.isConnected()) {
+            // Real input on the car display: reaches pop-ups, menus and the keyboard too.
+            displayHost.inject(event);
+            return true;
+        }
+        Activity activity = hostedActivity.get();
+        if (activity == null) return false;
         MotionEvent copy = MotionEvent.obtain(event);
         try {
             activity.dispatchTouchEvent(copy);
@@ -387,6 +595,7 @@ public class CarVideoActivity extends CarActivity implements SurfaceHolder.Callb
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         if (handleMediaKey(keyCode, event, true)) return true;
+        if (injectKey(event)) return true;
         Activity activity = hostedActivity.get();
         if (activity != null && activity.dispatchKeyEvent(event)) return true;
         return super.onKeyDown(keyCode, event);
@@ -395,6 +604,7 @@ public class CarVideoActivity extends CarActivity implements SurfaceHolder.Callb
     @Override
     public boolean onKeyUp(int keyCode, KeyEvent event) {
         if (handleMediaKey(keyCode, event, false)) return true;
+        if (injectKey(event)) return true;
         Activity activity = hostedActivity.get();
         if (activity != null && activity.dispatchKeyEvent(event)) return true;
         return super.onKeyUp(keyCode, event);
@@ -403,12 +613,24 @@ public class CarVideoActivity extends CarActivity implements SurfaceHolder.Callb
     /** Back from the car goes to YouTube first, like on the phone. */
     @Override
     public void onBackPressed() {
+        if (remoteDisplay && displayHost.isConnected()) {
+            long now = SystemClock.uptimeMillis();
+            displayHost.inject(new KeyEvent(now, now, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_BACK, 0));
+            displayHost.inject(new KeyEvent(now, now, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_BACK, 0));
+            return;
+        }
         Activity activity = hostedActivity.get();
         if (activity != null) {
             activity.onBackPressed();
         } else {
             super.onBackPressed();
         }
+    }
+
+    private boolean injectKey(KeyEvent event) {
+        if (!remoteDisplay || displayHost == null || !displayHost.isConnected()) return false;
+        displayHost.inject(event);
+        return true;
     }
 
     /** Steering wheel and head unit media keys control YouTube's media session. */
