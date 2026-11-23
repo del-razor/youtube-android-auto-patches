@@ -22,6 +22,14 @@ private val androidAutoVideoResourcePatch = patch {
         resourceXml("AndroidManifest.xml").use { manifest ->
             val application = manifest.elements("application").first()
 
+            // The car screen opens YouTube on a private virtual display. Android only lets an
+            // activity open on such a display when it is marked allowEmbedded, otherwise:
+            // "SecurityException: Permission Denial: starting Intent ... with launchDisplayId".
+            // Mark every activity, so YouTube can open its other screens there too.
+            manifest.elements("activity").forEach { activity ->
+                activity.setAttribute("android:allowEmbedded", "true")
+            }
+
             application.appendChild("service") {
                 setAttribute("android:name", CAR_VIDEO_SERVICE_CLASS)
                 // The name shown in the Android Auto launcher.
