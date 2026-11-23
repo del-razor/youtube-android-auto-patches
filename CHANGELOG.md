@@ -1,3 +1,9 @@
+## [1.0.0-dev.7](https://github.com/del-razor/youtube-android-auto-patches/compare/v1.0.0-dev.6...v1.0.0-dev.7) (2026-11-23)
+
+### ✨ New Features
+
+* Show video decoder diagnostics on the car screen ([3958dc8](https://github.com/del-razor/youtube-android-auto-patches/commit/3958dc83f97df8d3e5831fc92ff8d9a8255a21b4))
+
 ## [1.0.0-dev.6](https://github.com/del-razor/youtube-android-auto-patches/compare/v1.0.0-dev.5...v1.0.0-dev.6) (2026-11-23)
 
 ### ✨ New Features
