@@ -1,6 +1,6 @@
 {
   "NOTE": "Do NOT manually edit this file. This file is automatically updated when semantic release (release.yml) runs. Manually editing this file can break your releases and break third party tools that use this file.",
-  "version": "1.0.0-dev.7",
+  "version": "1.0.0-dev.8",
   "patches": [
     {
       "name": "Android Auto",
@@ -38,7 +38,7 @@
     },
     {
       "name": "Android Auto video",
-      "description": "Adds a YouTube screen to Android Auto that shows YouTube's own player on the car display, following the car's own 'video allowed' signal. Android Auto only lists it when the patched app is installed with the Play Store as installer, for example with KingInstaller.",
+      "description": "Adds YouTube to Android Auto as a full app on the car screen: home, search, the player and its controls, used from the car's touchscreen. Video follows the car's own 'video allowed' signal. Android Auto only lists it when the patched app is installed with the Play Store as installer, for example with KingInstaller.",
       "default": true,
       "category": null,
       "compatiblePackages": [

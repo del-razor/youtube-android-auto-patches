@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-11-23T16:07:02",
-  "description": "## [1.0.0-dev.7](https://github.com/del-razor/youtube-android-auto-patches/compare/v1.0.0-dev.6...v1.0.0-dev.7) (2026-11-23)\n\n### ✨ New Features\n\n* Show video decoder diagnostics on the car screen ([3958dc8](https://github.com/del-razor/youtube-android-auto-patches/commit/3958dc83f97df8d3e5831fc92ff8d9a8255a21b4))",
-  "download_url": "https://github.com/del-razor/youtube-android-auto-patches/releases/download/v1.0.0-dev.7/patches-1.0.0-dev.7.mpp",
+  "created_at": "2026-11-23T16:11:41",
+  "description": "## [1.0.0-dev.8](https://github.com/del-razor/youtube-android-auto-patches/compare/v1.0.0-dev.7...v1.0.0-dev.8) (2026-11-23)\n\n### ✨ New Features\n\n* Run the full YouTube app on the Android Auto screen ([935f817](https://github.com/del-razor/youtube-android-auto-patches/commit/935f817442a048aedbb9d224a1eff6fcb51bc28a))",
+  "download_url": "https://github.com/del-razor/youtube-android-auto-patches/releases/download/v1.0.0-dev.8/patches-1.0.0-dev.8.mpp",
   "signature_download_url": "",
-  "version": "1.0.0-dev.7"
+  "version": "1.0.0-dev.8"
 }

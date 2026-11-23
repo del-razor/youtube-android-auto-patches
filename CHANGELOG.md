@@ -1,3 +1,9 @@
+## [1.0.0-dev.8](https://github.com/del-razor/youtube-android-auto-patches/compare/v1.0.0-dev.7...v1.0.0-dev.8) (2026-11-23)
+
+### ✨ New Features
+
+* Run the full YouTube app on the Android Auto screen ([935f817](https://github.com/del-razor/youtube-android-auto-patches/commit/935f817442a048aedbb9d224a1eff6fcb51bc28a))
+
 ## [1.0.0-dev.7](https://github.com/del-razor/youtube-android-auto-patches/compare/v1.0.0-dev.6...v1.0.0-dev.7) (2026-11-23)
 
 ### ✨ New Features
