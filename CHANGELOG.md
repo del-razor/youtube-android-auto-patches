@@ -1,3 +1,9 @@
+## [1.0.0-dev.12](https://github.com/del-razor/youtube-android-auto-patches/compare/v1.0.0-dev.11...v1.0.0-dev.12) (2026-11-23)
+
+### ✨ New Features
+
+* trusted car display through Shizuku, real touch input, car keyboard and audio delay ([57bf761](https://github.com/del-razor/youtube-android-auto-patches/commit/57bf76154895a9bc7062ff44a6d1fc96a71091fd))
+
 ## [1.0.0-dev.11](https://github.com/del-razor/youtube-android-auto-patches/compare/v1.0.0-dev.10...v1.0.0-dev.11) (2026-11-23)
 
 ### ✨ New Features
