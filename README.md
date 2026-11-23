@@ -64,6 +64,17 @@ Runs the real YouTube app on the car screen, so the phone is not needed at all.
 - A readout in the top right corner shows the flag and the car display state. It hides itself
   after a few seconds once everything works.
 
+**Shizuku is needed for the first window.** Android only lets an app open a window on a virtual
+display it made when the app already has a window there, or holds a system permission. So the car
+screen asks [Shizuku](https://shizuku.rikka.app/) to open YouTube's first window there as the
+phone's shell user. After that, YouTube opens its other screens on the car by itself.
+Root works too, if the phone is rooted.
+
+1. Install Shizuku and start it (on an unrooted phone: Shizuku → Start via Wireless debugging).
+   It has to be started again after each phone restart.
+2. Open YouTube on the car. The first time, Shizuku asks on the phone whether YouTube may use it.
+   Allow it once.
+
 **Install requirement:** Android Auto only lists screen-drawing apps whose install record says
 the Play Store installed them. "Unknown sources" does not cover them. Install the patched APK
 with KingInstaller or a similar tool that opens the
@@ -72,8 +83,8 @@ Manager's normal install and `adb install -i com.android.vending` are rejected b
 Auto ([details](https://github.com/AndreyPavlenko/Fermata/issues/846)).
 
 **Untested risks:**
-- Android may refuse to open YouTube on the car display. The readout then says
-  "YouTube did not open on the car display".
+- Without Shizuku or root, Android refuses to open YouTube on the car display. The readout says
+  what to do.
 - Typing in YouTube's search box may bring up the keyboard on the phone instead of the car.
   YouTube's voice search should work from the car.
 - Pop-up menus may not react to touches from the car yet.

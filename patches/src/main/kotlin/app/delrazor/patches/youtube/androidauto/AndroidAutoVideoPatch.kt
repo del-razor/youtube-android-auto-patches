@@ -30,6 +30,29 @@ private val androidAutoVideoResourcePatch = patch {
                 activity.setAttribute("android:allowEmbedded", "true")
             }
 
+            // Android refuses the first window on a virtual display unless the caller holds a
+            // system permission. Shizuku runs that one launch as the phone's shell user.
+            // These are the entries the Shizuku client library declares in its own manifest.
+            application.parent!!.insertChild(application.index, "uses-permission") {
+                setAttribute("android:name", "moe.shizuku.manager.permission.API_V23")
+            }
+            application.appendChild("meta-data") {
+                setAttribute("android:name", "moe.shizuku.client.V3_SUPPORT")
+                setAttribute("android:value", "true")
+            }
+            // Shizuku hands its link to the app through this provider, at "<package>.shizuku".
+            // The official package rename patch also renames authorities that start with the
+            // old package name, so this stays right whichever patch runs first.
+            val packageName = application.parent!!.attribute("package")!!
+            application.appendChild("provider") {
+                setAttribute("android:name", "rikka.shizuku.ShizukuProvider")
+                setAttribute("android:authorities", "$packageName.shizuku")
+                setAttribute("android:multiprocess", "false")
+                setAttribute("android:enabled", "true")
+                setAttribute("android:exported", "true")
+                setAttribute("android:permission", "android.permission.INTERACT_ACROSS_USERS_FULL")
+            }
+
             application.appendChild("service") {
                 setAttribute("android:name", CAR_VIDEO_SERVICE_CLASS)
                 // The name shown in the Android Auto launcher.

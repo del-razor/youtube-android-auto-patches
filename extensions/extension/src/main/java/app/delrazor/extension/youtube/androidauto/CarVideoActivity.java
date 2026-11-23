@@ -265,21 +265,42 @@ public class CarVideoActivity extends CarActivity implements SurfaceHolder.Callb
             ActivityOptions options = ActivityOptions.makeBasic();
             options.setLaunchDisplayId(hostedDisplayId);
 
-            getApplicationContext().startActivity(intent, options.toBundle());
-            launchStatus = "opening YouTube";
-            Log.d(TAG, "Opening YouTube on car display " + hostedDisplayId);
-
-            mainHandler.postDelayed(() -> {
-                if (hostedActivity.get() == null) {
-                    launchStatus = "YouTube did not open on the car display";
-                    statusVisibleUntil = Long.MAX_VALUE;
-                }
-            }, LAUNCH_TIMEOUT_MS);
+            try {
+                getApplicationContext().startActivity(intent, options.toBundle());
+                launchStatus = "opening YouTube";
+                Log.d(TAG, "Opening YouTube on car display " + hostedDisplayId);
+                watchLaunch();
+            } catch (SecurityException denied) {
+                // Android lets an app open its first window on its own virtual display only with
+                // a system permission. Shizuku or root opens that first window instead.
+                Log.d(TAG, "Android refused the car display launch, using the helper: " + denied);
+                final int displayId = hostedDisplayId;
+                launchStatus = "Android refused, trying Shizuku";
+                CarDisplayLauncher.launch(displayId, intent.getComponent(), (status, failed) -> {
+                    if (displayId != hostedDisplayId || hostedActivity.get() != null) return;
+                    launchStatus = status;
+                    if (failed) {
+                        statusVisibleUntil = Long.MAX_VALUE;
+                    } else if (status.equals("opening YouTube")) {
+                        watchLaunch();
+                    }
+                    updateStatusView();
+                });
+            }
         } catch (Exception ex) {
             Log.e(TAG, "Could not open YouTube on the car display", ex);
             launchStatus = "launch error: " + ex.getClass().getSimpleName() + ": " + ex.getMessage();
             statusVisibleUntil = Long.MAX_VALUE;
         }
+    }
+
+    private void watchLaunch() {
+        mainHandler.postDelayed(() -> {
+            if (hostedActivity.get() == null && virtualDisplay != null) {
+                launchStatus = "YouTube did not open on the car display";
+                statusVisibleUntil = Long.MAX_VALUE;
+            }
+        }, LAUNCH_TIMEOUT_MS);
     }
 
     private void releaseVirtualDisplay() {

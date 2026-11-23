@@ -35,4 +35,9 @@ dependencies {
 
     // CarActivity uses androidx.fragment.
     implementation(libs.androidx.fragment)
+
+    // Shizuku (https://github.com/RikkaApps/Shizuku-API) opens YouTube's first window on the
+    // car's virtual display, which Android only allows with a system permission.
+    implementation(libs.shizuku.api)
+    implementation(libs.shizuku.provider)
 }

@@ -18,6 +18,9 @@
 -keep class com.google.android.apps.auto.sdk.** { *; }
 -keep class com.google.android.gms.car.** { *; }
 -keep class android.support.car.** { *; }
+# Shizuku: the provider is named in the manifest and its process call is used by reflection.
+-keep class rikka.shizuku.** { *; }
+-keep class moe.shizuku.** { *; }
 
 -dontwarn **
 -ignorewarnings
