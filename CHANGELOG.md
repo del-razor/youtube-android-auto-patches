@@ -1,3 +1,9 @@
+## [1.0.0-dev.6](https://github.com/del-razor/youtube-android-auto-patches/compare/v1.0.0-dev.5...v1.0.0-dev.6) (2026-11-23)
+
+### ✨ New Features
+
+* Make the video screen the only Android Auto entry by default ([45497c3](https://github.com/del-razor/youtube-android-auto-patches/commit/45497c3b8fdfd1452ebc6944c5f6aaaef5fc3ac1))
+
 ## [1.0.0-dev.5](https://github.com/del-razor/youtube-android-auto-patches/compare/v1.0.0-dev.4...v1.0.0-dev.5) (2026-11-23)
 
 ### 🐛 Bug Fixes
