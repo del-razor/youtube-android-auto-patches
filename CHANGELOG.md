@@ -1,3 +1,13 @@
+## [1.0.0-dev.11](https://github.com/del-razor/youtube-android-auto-patches/compare/v1.0.0-dev.10...v1.0.0-dev.11) (2026-11-23)
+
+### ✨ New Features
+
+* open YouTube's first car window through Shizuku when Android refuses ([dcc946c](https://github.com/del-razor/youtube-android-auto-patches/commit/dcc946ccdf5dd76bdd49e4ad85e17c5db59427eb))
+
+### 🐛 Bug Fixes
+
+* allow the Shizuku library's minimum Android version in the extension ([58bdaea](https://github.com/del-razor/youtube-android-auto-patches/commit/58bdaea110280b9fac773ae7d94308c697e06d2e))
+
 ## [1.0.0-dev.10](https://github.com/del-razor/youtube-android-auto-patches/compare/v1.0.0-dev.9...v1.0.0-dev.10) (2026-11-23)
 
 ### 🐛 Bug Fixes
