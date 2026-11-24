@@ -181,6 +181,11 @@ That means:
 Written against GasBuddy 702.10.27044. Install the patched GasBuddy with KingInstaller, the same as
 YouTube: Android Auto ignores Car App Library apps that weren't installed by the Play Store.
 
+**Blank map in the GasBuddy app:** patching re-signs GasBuddy, and Google Maps then refuses its map
+key. The "Fix blank Google Maps" patch (on by default) makes GasBuddy report its original Play Store
+certificate to the Google code running inside it. The car screen's map is drawn by Android Auto
+and doesn't need this.
+
 **Pixel and other 64-bit-only phones** need the arm64-v8a build of GasBuddy. Some downloads
 (for example an APKPure .xapk) only contain the 32-bit armeabi-v7a libraries, which won't install
 there.
