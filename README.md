@@ -29,11 +29,12 @@ Then patch YouTube with the official patches you already use **plus** "Android A
 ## 🩹 Patches list
 
 <!-- PATCHES_START EXPANDED -->
-> **[v1.0.0-dev.13](https://github.com/del-razor/youtube-android-auto-patches/releases/tag/v1.0.0-dev.13)**&nbsp;&nbsp;&middot;&nbsp;&nbsp;`dev`&nbsp;&nbsp;&middot;&nbsp;&nbsp;**2 patches** across **1 apps**&nbsp;&nbsp;&middot;&nbsp;&nbsp;[Full details](PATCHES.md)
+> **[v1.0.0-dev.14](https://github.com/del-razor/youtube-android-auto-patches/releases/tag/v1.0.0-dev.14)**&nbsp;&nbsp;&middot;&nbsp;&nbsp;`dev`&nbsp;&nbsp;&middot;&nbsp;&nbsp;**3 patches** across **2 apps**&nbsp;&nbsp;&middot;&nbsp;&nbsp;[Full details](PATCHES.md)
 
 | # | App | Patches | Version | Package |
 |---|---|---|---|---|
-| 1 | [**YouTube**](PATCHES.md#youtube-comgoogleandroidyoutube) | 2 | `experimental 21.30.216` | [`com.google.android.youtube`](https://play.google.com/store/apps/details?id=com.google.android.youtube) |
+| 1 | [**GasBuddy**](PATCHES.md#gasbuddy-gbisgbandroid) | 1 | `experimental 702.10.27044` | [`gbis.gbandroid`](https://play.google.com/store/apps/details?id=gbis.gbandroid) |
+| 2 | [**YouTube**](PATCHES.md#youtube-comgoogleandroidyoutube) | 2 | `experimental 21.30.216` | [`com.google.android.youtube`](https://play.google.com/store/apps/details?id=com.google.android.youtube) |
 <!-- PATCHES_END -->
 
 ## What it does

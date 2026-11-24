@@ -1,6 +1,6 @@
 {
   "NOTE": "Do NOT manually edit this file. This file is automatically updated when semantic release (release.yml) runs. Manually editing this file can break your releases and break third party tools that use this file.",
-  "version": "1.0.0-dev.13",
+  "version": "1.0.0-dev.14",
   "patches": [
     {
       "name": "Android Auto",
@@ -29,6 +29,40 @@
               "versionCodes": null,
               "isExperimental": true,
               "minSdk": 29,
+              "description": null
+            }
+          ]
+        }
+      ],
+      "options": []
+    },
+    {
+      "name": "Android Auto gas stations",
+      "description": "Adds GasBuddy to Android Auto as a car app: a map and list of nearby stations with prices, a fuel grade picker, and a Navigate button that hands the station to Google Maps or Waze. Android Auto only lists it when the patched app is installed with the Play Store as installer, for example with KingInstaller.",
+      "default": true,
+      "category": null,
+      "compatiblePackages": [
+        {
+          "packageName": "gbis.gbandroid",
+          "name": "GasBuddy",
+          "description": null,
+          "apkFileType": null,
+          "appIconColor": "#2ECC71",
+          "signatures": null,
+          "formFactor": "MOBILE",
+          "targets": [
+            {
+              "version": null,
+              "versionCodes": null,
+              "isExperimental": true,
+              "minSdk": null,
+              "description": null
+            },
+            {
+              "version": "702.10.27044",
+              "versionCodes": null,
+              "isExperimental": true,
+              "minSdk": 26,
               "description": null
             }
           ]

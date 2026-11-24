@@ -1,3 +1,9 @@
+## [1.0.0-dev.14](https://github.com/del-razor/youtube-android-auto-patches/compare/v1.0.0-dev.13...v1.0.0-dev.14) (2026-11-24)
+
+### ✨ New Features
+
+* GasBuddy car app for Android Auto with live stations and prices ([#3](https://github.com/del-razor/youtube-android-auto-patches/issues/3)) ([4ddd20d](https://github.com/del-razor/youtube-android-auto-patches/commit/4ddd20d1aaea763b142e4c7e45d4472e452743b0))
+
 ## [1.0.0-dev.13](https://github.com/del-razor/youtube-android-auto-patches/compare/v1.0.0-dev.12...v1.0.0-dev.13) (2026-11-24)
 
 ### 🐛 Bug Fixes
