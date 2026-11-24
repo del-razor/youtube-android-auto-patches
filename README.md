@@ -88,6 +88,9 @@ Without Shizuku (or root), Android refuses to open YouTube on the car at all.
 2. Open YouTube on the car. The first time, Shizuku asks on the phone whether YouTube may use it.
    Allow it once.
 
+**Back button.** The ◀ button in the bottom left corner is YouTube's back button. A head unit's
+own back button may be handled by Android Auto itself, which leaves the app.
+
 **Audio delay.** The car shows the picture a little later than it plays the sound. Tap **A/V** in
 the bottom left corner of the car screen and use − and + (25 ms steps) until lips match. The value
 is kept. It only applies while the car screen is open.

@@ -25,6 +25,7 @@ import android.util.Log;
 import android.util.TypedValue;
 import android.view.Display;
 import android.view.Gravity;
+import android.view.InputDevice;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.SurfaceHolder;
@@ -227,6 +228,13 @@ public class CarVideoActivity extends CarActivity implements SurfaceHolder.Callb
         bar.setGravity(Gravity.CENTER_VERTICAL);
         bar.setPadding(dp(8), dp(8), dp(8), dp(8));
 
+        // Back for YouTube. The head unit's own back button may be kept by Android Auto,
+        // which then leaves the app instead.
+        TextView back = syncButton("\u25C0");
+        back.setAlpha(0.7f);
+        back.setOnClickListener(v -> onBackPressed());
+        bar.addView(back);
+
         TextView toggle = syncButton("A/V");
         toggle.setAlpha(0.55f);
         toggle.setOnClickListener(v -> {
@@ -235,7 +243,10 @@ public class CarVideoActivity extends CarActivity implements SurfaceHolder.Callb
             toggle.setAlpha(show ? 1f : 0.55f);
             scheduleSyncPanelHide(toggle);
         });
-        bar.addView(toggle);
+        LinearLayout.LayoutParams toggleParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        toggleParams.setMargins(dp(8), 0, 0, 0);
+        bar.addView(toggle, toggleParams);
 
         syncPanel = new LinearLayout(this);
         syncPanel.setOrientation(LinearLayout.HORIZONTAL);
@@ -302,7 +313,9 @@ public class CarVideoActivity extends CarActivity implements SurfaceHolder.Callb
 
     private void showAudioDelay() {
         int delay = CarAudioSync.getDelayMs();
-        syncValue.setText("Audio delay " + (delay > 0 ? "+" : "") + delay + " ms");
+        if (syncValue == null) return;
+        syncValue.setText("Audio delay " + (delay > 0 ? "+" : "") + delay + " ms\n"
+                + "Last swipe: " + lastGesture);
     }
 
     // endregion
@@ -576,7 +589,7 @@ public class CarVideoActivity extends CarActivity implements SurfaceHolder.Callb
         }
         if (remoteDisplay && displayHost.isConnected()) {
             // Real input on the car display: reaches pop-ups, menus and the keyboard too.
-            displayHost.inject(event);
+            injectTouch(event);
             return true;
         }
         Activity activity = hostedActivity.get();
@@ -590,6 +603,77 @@ public class CarVideoActivity extends CarActivity implements SurfaceHolder.Callb
             copy.recycle();
         }
         return true;
+    }
+
+    // Touch stream state, so every injected gesture is consistent.
+    private long touchDownTime;
+    private long touchTimeOffset;
+    private long lastInjectedTime;
+    private int gestureMoves;
+    private float gestureStartX;
+    private float gestureStartY;
+    private String lastGesture = "none yet";
+
+    /**
+     * Rebuilds each car touch before injecting it. Touches from the car carry the head unit's
+     * timing and can bundle several moves into one event. Android drops or misreads moves whose
+     * times do not follow the down time, which made slow drags do nothing and quick flicks go far.
+     * So every event gets a down time from this phone, keeps the car's spacing between samples,
+     * and each bundled move is sent as its own event.
+     */
+    private void injectTouch(MotionEvent event) {
+        int action = event.getActionMasked();
+        long now = SystemClock.uptimeMillis();
+        if (action == MotionEvent.ACTION_DOWN) {
+            touchDownTime = now;
+            touchTimeOffset = now - event.getEventTime();
+            lastInjectedTime = now;
+            gestureMoves = 0;
+            gestureStartX = event.getX();
+            gestureStartY = event.getY();
+        }
+
+        int pointers = event.getPointerCount();
+        MotionEvent.PointerProperties[] props = new MotionEvent.PointerProperties[pointers];
+        MotionEvent.PointerCoords[] coords = new MotionEvent.PointerCoords[pointers];
+        for (int i = 0; i < pointers; i++) {
+            props[i] = new MotionEvent.PointerProperties();
+            event.getPointerProperties(i, props[i]);
+            props[i].toolType = MotionEvent.TOOL_TYPE_FINGER;
+            coords[i] = new MotionEvent.PointerCoords();
+        }
+
+        if (action == MotionEvent.ACTION_MOVE) {
+            for (int h = 0; h < event.getHistorySize(); h++) {
+                for (int i = 0; i < pointers; i++) event.getHistoricalPointerCoords(i, h, coords[i]);
+                sendTouch(MotionEvent.ACTION_MOVE, event.getHistoricalEventTime(h), props, coords);
+                gestureMoves++;
+            }
+            gestureMoves++;
+        }
+        for (int i = 0; i < pointers; i++) event.getPointerCoords(i, coords[i]);
+        sendTouch(event.getAction(), event.getEventTime(), props, coords);
+
+        if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+            lastGesture = gestureMoves + " moves, "
+                    + Math.round(Math.hypot(event.getX() - gestureStartX, event.getY() - gestureStartY))
+                    + " px, " + (now - touchDownTime) + " ms";
+            Log.d(TAG, "Car touch gesture: " + lastGesture);
+            showAudioDelay();
+        }
+    }
+
+    private void sendTouch(int action, long carTime, MotionEvent.PointerProperties[] props,
+                           MotionEvent.PointerCoords[] coords) {
+        long time = carTime + touchTimeOffset;
+        long now = SystemClock.uptimeMillis();
+        // Never in the future, never before the previous event.
+        time = Math.max(lastInjectedTime, Math.min(now, time));
+        lastInjectedTime = time;
+        MotionEvent copy = MotionEvent.obtain(touchDownTime, time, action, props.length, props,
+                coords, 0, 0, 1f, 1f, 0, 0, InputDevice.SOURCE_TOUCHSCREEN, 0);
+        displayHost.inject(copy);
+        copy.recycle();
     }
 
     @Override
