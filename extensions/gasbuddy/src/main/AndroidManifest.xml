@@ -1,0 +1,7 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Keeps androidx.core's CoreComponentFactory out of the extension. It would be kept
+         under its real name, and GasBuddy has its own class with that name. -->
+    <application tools:remove="android:appComponentFactory" />
+</manifest>

@@ -150,6 +150,26 @@ These are untested assumptions. Each is marked `GUESS` or `UNTESTED` in the code
   check `adb logcat -s DelrazorAndroidAuto` for "Refused media browser connection".
 - Morphe Manager can apply patches from two bundles to one app in a single run.
 
+## GasBuddy in Android Auto (experimental)
+
+The "Android Auto gas stations" patch adds a native Android Auto car app to GasBuddy. It uses the
+official Android for Cars App Library ("point of interest" category), so it looks and behaves like
+other Android Auto apps and works while driving. It needs no Shizuku.
+
+- A map with nearby stations and a list sorted by price ("Cheapest") or distance ("Closest").
+  While driving, the car decides how many rows it shows.
+- A fuel grade picker (Regular, Midgrade, Premium, Diesel), remembered between drives.
+- Tap a station to see its address and all posted prices, then **Navigate** to hand it to
+  Google Maps or Waze.
+- It uses GasBuddy's own location permission. Open GasBuddy on the phone once and allow location.
+
+Install the patched GasBuddy with KingInstaller, the same as YouTube: Android Auto ignores Car App
+Library apps that weren't installed by the Play Store.
+
+**Status:** the car screens are built, but they aren't yet wired to GasBuddy's station and price
+data. Until they are, the list says "Station prices aren't connected yet". That build checks that
+Android Auto lists the app and opens its screens.
+
 ## 🛠️ Building
 
 This cloud workspace could not build the bundle (Google's and GitHub's package servers are blocked

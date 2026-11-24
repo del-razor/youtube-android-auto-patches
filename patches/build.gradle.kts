@@ -15,7 +15,7 @@ group = "app.delrazor"
 patches {
     about {
         name = "del-razor Patches"
-        description = "Android Auto support for YouTube"
+        description = "Android Auto support for YouTube and GasBuddy"
         // GUESS: repository name. Update if the GitHub repo gets a different name.
         source = "git@github.com:del-razor/youtube-android-auto-patches.git"
         author = "del-razor"

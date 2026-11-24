@@ -18,6 +18,9 @@
 -keep class com.google.android.apps.auto.sdk.** { *; }
 -keep class com.google.android.gms.car.** { *; }
 -keep class android.support.car.** { *; }
+# Car App Library (GasBuddy): Android Auto rebuilds the screens it receives from their class and
+# field names, so the library keeps its real names.
+-keep class androidx.car.app.** { *; }
 # Shizuku: the provider is named in the manifest and its process call is used by reflection.
 -keep class rikka.shizuku.** { *; }
 -keep class moe.shizuku.** { *; }
