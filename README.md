@@ -15,6 +15,15 @@ Add this repo URL as a patch source in Morphe Manager: https://github.com/del-ra
   <img src=".github/assets/add-to-morphe.svg" alt="Add to Morphe" height="48">
 </a>
 
+This repo is private, and new builds are published from the `dev` branch, so Morphe Manager
+needs a token and the dev link:
+
+1. On GitHub, create a fine-grained personal access token with access to only this repository
+   and **Contents: Read-only**.
+2. In Morphe Manager: Settings → Advanced → **GitHub PAT**, and paste the token.
+3. Add the source `https://github.com/del-razor/youtube-android-auto-patches/tree/dev`.
+   Manager then picks up each new release from `patches-bundle.json` on its own.
+
 Then patch YouTube with the official patches you already use **plus** "Android Auto video" from this bundle.
 
 ## 🩹 Patches list
