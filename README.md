@@ -150,6 +150,40 @@ These are untested assumptions. Each is marked `GUESS` or `UNTESTED` in the code
   check `adb logcat -s DelrazorAndroidAuto` for "Refused media browser connection".
 - Morphe Manager can apply patches from two bundles to one app in a single run.
 
+## GasBuddy in Android Auto (experimental)
+
+The "Android Auto gas stations" patch adds a native Android Auto car app to GasBuddy. It uses the
+official Android for Cars App Library ("point of interest" category), so it looks and behaves like
+other Android Auto apps and works while driving. It needs no Shizuku.
+
+- A map with nearby stations and a list sorted by price ("Cheapest") or distance ("Closest").
+  While driving, the car decides how many rows it shows.
+- A fuel grade picker (Regular, Midgrade, Premium, Diesel), remembered between drives.
+- Tap a station to see its address and all posted prices, then **Navigate** to hand it to
+  Google Maps or Waze.
+- It uses GasBuddy's own location permission. Open GasBuddy on the phone once and allow location.
+
+### Where the prices come from
+
+GasBuddy is a React Native app, so its station search is JavaScript. The patch watches the requests
+it sends through React Native's networking module and remembers its last nearby-station search,
+including its sign-in headers. The car screen repeats that search with the car's position and fuel
+grade and reads the stations and prices from GasBuddy's reply.
+
+That means:
+
+- **Open GasBuddy on the phone once after installing** and let it show nearby stations. Until it
+  has, the car screen asks you to.
+- If GasBuddy's sign-in expires while the app hasn't been opened for a while, the car screen says
+  so. Opening GasBuddy on the phone refreshes it.
+
+Written against GasBuddy 702.10.27044. Install the patched GasBuddy with KingInstaller, the same as
+YouTube: Android Auto ignores Car App Library apps that weren't installed by the Play Store.
+
+**Pixel and other 64-bit-only phones** need the arm64-v8a build of GasBuddy. Some downloads
+(for example an APKPure .xapk) only contain the 32-bit armeabi-v7a libraries, which won't install
+there.
+
 ## 🛠️ Building
 
 This cloud workspace could not build the bundle (Google's and GitHub's package servers are blocked
