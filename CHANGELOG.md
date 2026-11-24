@@ -1,3 +1,9 @@
+## [1.0.0-dev.13](https://github.com/del-razor/youtube-android-auto-patches/compare/v1.0.0-dev.12...v1.0.0-dev.13) (2026-11-24)
+
+### 🐛 Bug Fixes
+
+* smooth car drags and swipes, add an on-screen back button ([16c2bd9](https://github.com/del-razor/youtube-android-auto-patches/commit/16c2bd95dd5c704aac604bd839a4151f8b84c1c3))
+
 ## [1.0.0-dev.12](https://github.com/del-razor/youtube-android-auto-patches/compare/v1.0.0-dev.11...v1.0.0-dev.12) (2026-11-23)
 
 ### ✨ New Features
