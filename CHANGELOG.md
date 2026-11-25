@@ -1,3 +1,9 @@
+## [1.0.0-dev.15](https://github.com/del-razor/youtube-android-auto-patches/compare/v1.0.0-dev.14...v1.0.0-dev.15) (2026-11-25)
+
+### 🐛 Bug Fixes
+
+* restore Google Maps in patched GasBuddy ([#4](https://github.com/del-razor/youtube-android-auto-patches/issues/4)) ([33eab5e](https://github.com/del-razor/youtube-android-auto-patches/commit/33eab5e309745a4beb5a8bf3a9b20c46f7d021eb))
+
 ## [1.0.0-dev.14](https://github.com/del-razor/youtube-android-auto-patches/compare/v1.0.0-dev.13...v1.0.0-dev.14) (2026-11-24)
 
 ### ✨ New Features
