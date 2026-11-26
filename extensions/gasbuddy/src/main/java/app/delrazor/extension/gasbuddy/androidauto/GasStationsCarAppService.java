@@ -37,6 +37,13 @@ public final class GasStationsCarAppService extends CarAppService {
             "com.google.android.car.templatehost"
     ));
 
+    @Override
+    public void onCreate() {
+        CarDiagnostics.startWatchdog();
+        CarDiagnostics.mark("Car service created");
+        super.onCreate();
+    }
+
     @NonNull
     @Override
     public HostValidator createHostValidator() {
@@ -47,6 +54,8 @@ public final class GasStationsCarAppService extends CarAppService {
     @Override
     public Session onCreateSession() {
         HostInfo host = getHostInfo();
+        CarDiagnostics.mark("Session requested by " + (host != null ? host.getPackageName() : "unknown host")
+                + (CarProcess.isCarProcess() ? "" : " (not in the car process)"));
         final boolean allowed = host != null && CAR_HOSTS.contains(host.getPackageName());
         if (!allowed) {
             Log.w(TAG, "Car screen refused for " + (host != null ? host.getPackageName() : "unknown host"));
@@ -55,6 +64,7 @@ public final class GasStationsCarAppService extends CarAppService {
             @NonNull
             @Override
             public Screen onCreateScreen(@NonNull Intent intent) {
+                CarDiagnostics.mark("First screen requested");
                 return allowed ? new StationListScreen(getCarContext())
                         : new RefusedScreen(getCarContext());
             }

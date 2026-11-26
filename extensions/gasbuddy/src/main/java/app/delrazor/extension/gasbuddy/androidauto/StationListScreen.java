@@ -53,6 +53,12 @@ final class StationListScreen extends Screen {
     private boolean loading;
     /** Ignores results of a load that a newer one replaced. */
     private int loadGeneration;
+    /**
+     * Rows the car allows. Asking the car is a call to Android Auto that can wait, so it is asked
+     * on the worker, never while Android Auto waits for a template.
+     */
+    private volatile int rowLimit = DEFAULT_ROW_LIMIT;
+    private boolean rowLimitAsked;
 
     StationListScreen(@NonNull CarContext carContext) {
         super(carContext);
@@ -71,7 +77,11 @@ final class StationListScreen extends Screen {
         loading = true;
         if (redraw) invalidate();
 
+        final boolean askRowLimit = !rowLimitAsked;
+        rowLimitAsked = true;
         WORKER.execute(() -> {
+            if (askRowLimit) rowLimit = askRowLimit();
+            CarDiagnostics.mark("Finding stations");
             List<Station> found = null;
             String problem = null;
             try {
@@ -92,6 +102,8 @@ final class StationListScreen extends Screen {
                 Log.e(TAG, "Loading stations failed", e);
             }
 
+            CarDiagnostics.mark(problem != null ? "Stations failed: " + problem
+                    : "Found " + found.size() + " stations");
             final List<Station> loaded = found;
             final String shown = problem;
             main.post(() -> {
@@ -107,6 +119,7 @@ final class StationListScreen extends Screen {
     @NonNull
     @Override
     public Template onGetTemplate() {
+        CarDiagnostics.mark(stations == null ? "Showing the loading screen" : "Showing the station list");
         Context context = getCarContext();
         FuelGrade grade = CarPrefs.grade(context);
         boolean byDistance = CarPrefs.sortByDistance(context);
@@ -123,7 +136,7 @@ final class StationListScreen extends Screen {
 
         ItemList.Builder list = new ItemList.Builder();
         List<Station> sorted = sorted(stations, grade, byDistance);
-        int limit = Math.min(sorted.size(), rowLimit());
+        int limit = Math.min(sorted.size(), rowLimit);
         for (int i = 0; i < limit; i++) {
             list.addItem(row(sorted.get(i), grade, i + 1));
         }
@@ -193,7 +206,7 @@ final class StationListScreen extends Screen {
         return Distance.create(metres / 1000, Distance.UNIT_KILOMETERS);
     }
 
-    private int rowLimit() {
+    private int askRowLimit() {
         try {
             if (getCarContext().getCarAppApiLevel() >= CarAppApiLevels.LEVEL_2) {
                 return getCarContext().getCarService(ConstraintManager.class)

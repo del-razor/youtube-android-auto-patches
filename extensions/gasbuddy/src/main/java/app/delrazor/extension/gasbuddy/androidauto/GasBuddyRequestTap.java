@@ -2,13 +2,16 @@ package app.delrazor.extension.gasbuddy.androidauto;
 
 import android.app.Application;
 import android.content.Context;
-import android.content.SharedPreferences;
 import android.net.Uri;
+import android.util.AtomicFile;
 import android.util.Log;
 
 import org.json.JSONObject;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -22,13 +25,18 @@ import java.util.Map;
  * GasBuddy is a React Native app: its screens and server calls are JavaScript, and every request
  * goes through React Native's NetworkingModule. The patch calls {@link #onRequest} there before
  * each request is sent. The last station search (its address and headers, which hold GasBuddy's
- * sign-in) is kept in memory and in GasBuddy's private storage, so it survives the app being
- * closed before the car connects. The sign-in is refreshed from every later GasBuddy request.
+ * sign-in) is kept in a file in GasBuddy's private storage, so it survives the app being closed
+ * before the car connects. The sign-in is refreshed from every later GasBuddy request.
+ *
+ * The car screen runs in its own process ({@link CarProcess}), so it reads the file again
+ * whenever GasBuddy's own process has written a newer one.
  */
 public final class GasBuddyRequestTap {
     private static final String TAG = "DelRazorGasBuddyCar";
-    private static final String PREFS = "delrazor_android_auto_search";
-    private static final String KEY_SEARCH = "station_search";
+    /** Where dev.14 and dev.15 kept it. Read once if the file isn't there yet. */
+    private static final String OLD_PREFS = "delrazor_android_auto_search";
+    private static final String OLD_KEY_SEARCH = "station_search";
+    private static final String FILE_NAME = "delrazor_android_auto_station_search.json";
 
     /** A station search the app made: its address and headers. */
     static final class CapturedSearch {
@@ -41,8 +49,10 @@ public final class GasBuddyRequestTap {
         }
     }
 
-    private static volatile CapturedSearch latest;
-    private static volatile boolean loaded;
+    private static final Object lock = new Object();
+    private static CapturedSearch latest;
+    /** When the file behind {@link #latest} was written, to notice newer ones. */
+    private static long latestModified = -1;
 
     private GasBuddyRequestTap() {
     }
@@ -101,11 +111,18 @@ public final class GasBuddyRequestTap {
     }
 
     static CapturedSearch get() {
-        if (latest == null && !loaded) {
-            loaded = true;
-            latest = load();
+        Context context = application();
+        synchronized (lock) {
+            if (context == null) return latest;
+            File file = file(context);
+            long modified = file.exists() ? file.lastModified() : 0;
+            if (modified != latestModified) {
+                CapturedSearch read = modified != 0 ? read(file) : readOldPrefs(context);
+                if (read != null || modified != 0) latest = read;
+                latestModified = modified;
+            }
+            return latest;
         }
-        return latest;
     }
 
     private static Map<String, String> readHeaders(Object array) throws Exception {
@@ -141,45 +158,67 @@ public final class GasBuddyRequestTap {
     }
 
     private static void save(CapturedSearch search) {
-        latest = search;
-        loaded = true;
         Context context = application();
-        if (context == null) return;
-        try {
-            JSONObject headers = new JSONObject();
-            for (Map.Entry<String, String> entry : search.headers.entrySet()) {
-                headers.put(entry.getKey(), entry.getValue());
+        synchronized (lock) {
+            latest = search;
+            if (context == null) return;
+            try {
+                JSONObject headers = new JSONObject();
+                for (Map.Entry<String, String> entry : search.headers.entrySet()) {
+                    headers.put(entry.getKey(), entry.getValue());
+                }
+                JSONObject json = new JSONObject().put("url", search.url).put("headers", headers);
+                File file = file(context);
+                AtomicFile atomic = new AtomicFile(file);
+                FileOutputStream out = atomic.startWrite();
+                try {
+                    out.write(json.toString().getBytes(StandardCharsets.UTF_8));
+                    atomic.finishWrite(out);
+                } catch (Exception e) {
+                    atomic.failWrite(out);
+                    throw e;
+                }
+                latestModified = file.lastModified();
+            } catch (Exception e) {
+                Log.w(TAG, "Saving the station search failed", e);
             }
-            JSONObject json = new JSONObject().put("url", search.url).put("headers", headers);
-            prefs(context).edit().putString(KEY_SEARCH, json.toString()).apply();
-        } catch (Exception e) {
-            Log.w(TAG, "Saving the station search failed", e);
         }
     }
 
-    private static CapturedSearch load() {
-        Context context = application();
-        if (context == null) return null;
-        String saved = prefs(context).getString(KEY_SEARCH, null);
-        if (saved == null) return null;
+    private static File file(Context context) {
+        return new File(context.getFilesDir(), FILE_NAME);
+    }
+
+    private static CapturedSearch read(File file) {
         try {
-            JSONObject json = new JSONObject(saved);
-            JSONObject headersJson = json.getJSONObject("headers");
-            Map<String, String> headers = new LinkedHashMap<>();
-            Iterator<String> names = headersJson.keys();
-            while (names.hasNext()) {
-                String name = names.next();
-                headers.put(name, headersJson.getString(name));
-            }
-            return new CapturedSearch(json.getString("url"), headers);
+            byte[] data = new AtomicFile(file).readFully();
+            return parse(new String(data, StandardCharsets.UTF_8));
         } catch (Exception e) {
             Log.w(TAG, "Reading the saved station search failed", e);
             return null;
         }
     }
 
-    private static SharedPreferences prefs(Context context) {
-        return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+    private static CapturedSearch readOldPrefs(Context context) {
+        try {
+            String saved = context.getSharedPreferences(OLD_PREFS, Context.MODE_PRIVATE)
+                    .getString(OLD_KEY_SEARCH, null);
+            return saved != null ? parse(saved) : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static CapturedSearch parse(String saved) throws Exception {
+        JSONObject json = new JSONObject(saved);
+        JSONObject headersJson = json.getJSONObject("headers");
+        Map<String, String> headers = new LinkedHashMap<>();
+        Iterator<String> names = headersJson.keys();
+        while (names.hasNext()) {
+            String name = names.next();
+            headers.put(name, headersJson.getString(name));
+        }
+        return new CapturedSearch(json.getString("url"), headers);
     }
 
     private static Context application() {
