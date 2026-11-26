@@ -2,6 +2,7 @@ package app.delrazor.patches.gasbuddy.androidauto
 
 import app.delrazor.patches.gasbuddy.shared.Constants.COMPATIBILITY_GASBUDDY
 import app.morphe.patcher.extensions.InstructionExtensions.addInstruction
+import app.morphe.patcher.extensions.InstructionExtensions.addInstructionsWithLabels
 import app.morphe.patcher.extensions.InstructionExtensions.getInstruction
 import app.morphe.patcher.methodCall
 import app.morphe.patcher.patch.PatchException
@@ -9,6 +10,7 @@ import app.morphe.patcher.patch.patch
 import app.morphe.patcher.patch.resourceFile
 import app.morphe.patcher.patch.resourceXml
 import app.morphe.patcher.util.matchAllMethodIndicesForEach
+import app.morphe.patcher.util.smali.ExternalLabel
 import com.android.tools.smali.dexlib2.iface.instruction.FiveRegisterInstruction
 import com.android.tools.smali.dexlib2.iface.instruction.Instruction
 import com.android.tools.smali.dexlib2.iface.instruction.RegisterRangeInstruction
@@ -16,6 +18,9 @@ import java.util.logging.Logger
 
 private const val CAR_APP_SERVICE_CLASS =
     "app.delrazor.extension.gasbuddy.androidauto.GasStationsCarAppService"
+
+/** Must match CarProcess.SUFFIX in the extension. */
+private const val CAR_PROCESS = ":androidauto"
 
 private const val CAR_APP_DESCRIPTION_NAME = "delrazor_gasbuddy_android_auto_app_desc"
 
@@ -77,6 +82,8 @@ private val gasBuddyCarAppManifestPatch = patch {
                 // The name shown in the Android Auto launcher. The icon is GasBuddy's own.
                 setAttribute("android:label", "GasBuddy")
                 setAttribute("android:exported", "true")
+                // Its own process, where GasBuddy's slow startup is skipped (see below).
+                setAttribute("android:process", CAR_PROCESS)
                 appendChild("intent-filter") {
                     appendChild("action") {
                         setAttribute("android:name", "androidx.car.app.CarAppService")
@@ -151,6 +158,54 @@ private val gasBuddyRequestTapPatch = patch {
     }
 }
 
+private const val CAR_PROCESS_CLASS = "Lapp/delrazor/extension/gasbuddy/androidauto/CarProcess;"
+
+private const val MAIN_APPLICATION_CLASS = "Lgbis/gbandroid/MainApplication;"
+
+/**
+ * GasBuddy's Application.onCreate starts React Native, Firebase, AppsFlyer, Localytics,
+ * Foursquare, MicroBlink and more on the main thread. When Android Auto opens the car screen
+ * while GasBuddy isn't running, all of that runs first, and Android Auto gives up waiting and
+ * says the app isn't responding. The car screen needs none of it, so in the car process
+ * onCreate returns right after Application.onCreate. GasBuddy's own process runs it as before.
+ */
+private val gasBuddyCarProcessStartupPatch = patch {
+    extendWith("extensions/gasbuddy.mpe")
+
+    execute {
+        var hooked = 0
+
+        methodCall(
+            definingClass = "Landroid/app/Application;",
+            name = "onCreate",
+        ).matchAllMethodIndicesForEach(requireMatches = false) { index ->
+            if (definingClass != MAIN_APPLICATION_CLASS || name != "onCreate" ||
+                parameterTypes.isNotEmpty()
+            ) return@matchAllMethodIndicesForEach
+
+            // v0 is a scratch register: GasBuddy's next instruction writes it.
+            val next = getInstruction(index + 1)
+            addInstructionsWithLabels(
+                index + 1,
+                """
+                    invoke-static {}, $CAR_PROCESS_CLASS->skipAppStartup()Z
+                    move-result v0
+                    if-eqz v0, :run_app_startup
+                    return-void
+                """,
+                ExternalLabel("run_app_startup", next),
+            )
+            hooked++
+        }
+
+        if (hooked != 1) {
+            throw PatchException(
+                "Could not find GasBuddy's startup (MainApplication.onCreate), found $hooked"
+            )
+        }
+    }
+}
+
 @Suppress("unused")
 val gasBuddyAndroidAutoPatch = patch(
     name = "Android Auto gas stations",
@@ -164,5 +219,5 @@ val gasBuddyAndroidAutoPatch = patch(
 
     extendWith("extensions/gasbuddy.mpe")
 
-    dependsOn(gasBuddyCarAppManifestPatch, gasBuddyRequestTapPatch)
+    dependsOn(gasBuddyCarAppManifestPatch, gasBuddyRequestTapPatch, gasBuddyCarProcessStartupPatch)
 }

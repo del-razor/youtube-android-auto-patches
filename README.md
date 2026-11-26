@@ -178,6 +178,14 @@ That means:
 - If GasBuddy's sign-in expires while the app hasn't been opened for a while, the car screen says
   so. Opening GasBuddy on the phone refreshes it.
 
+The car screen runs in its own process ("gbis.gbandroid:androidauto") that skips GasBuddy's own
+startup (React Native, Firebase, ads and analytics SDKs). That startup took long enough that
+Android Auto reported GasBuddy as not responding when it opened the car screen cold.
+
+**Car screen log:** the car screen writes what it did, and the main thread's stack whenever it is
+stuck for more than two seconds, to `Download/GasBuddy-car-log.txt` on the phone (Android 10 and
+newer). Share that file when reporting a car screen problem.
+
 Written against GasBuddy 702.10.27044. Install the patched GasBuddy with KingInstaller, the same as
 YouTube: Android Auto ignores Car App Library apps that weren't installed by the Play Store.
 
